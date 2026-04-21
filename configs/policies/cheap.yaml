@@ -1,0 +1,16 @@
+name: cheap
+description: Cheap preset for simple or low-priority work.
+
+route: fast
+explanation: minimal
+budget: low
+allow_deep: false
+
+output:
+  lean_output: true
+  silent_success: true
+  patch_first: true
+
+context:
+  compact: more
+  preserve_pinned_facts: true

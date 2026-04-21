@@ -1,0 +1,16 @@
+name: deep
+description: Deep preset for ambiguous or high-stakes work.
+
+route: deep
+explanation: detailed
+budget: high
+allow_deep: true
+
+output:
+  lean_output: false
+  silent_success: false
+  patch_first: true
+
+context:
+  compact: careful
+  preserve_pinned_facts: true

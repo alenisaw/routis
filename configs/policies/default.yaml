@@ -1,0 +1,15 @@
+name: default
+description: Default preset for early local use.
+
+route: balanced
+explanation: short
+budget: moderate
+
+output:
+  lean_output: true
+  silent_success: true
+  patch_first: true
+
+context:
+  compact: true
+  preserve_pinned_facts: true

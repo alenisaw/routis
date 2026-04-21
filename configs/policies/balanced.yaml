@@ -1,0 +1,16 @@
+name: balanced
+description: Middle preset for day-to-day use.
+
+route: balanced
+explanation: short
+budget: moderate
+allow_deep: true
+
+output:
+  lean_output: true
+  silent_success: true
+  patch_first: true
+
+context:
+  compact: normal
+  preserve_pinned_facts: true
