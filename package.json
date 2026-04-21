@@ -1,0 +1,38 @@
+{
+  "name": "routis",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CLI-first adaptive execution router foundation for Codex",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "routis": "./bin/routis.js"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "configs/policies/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "cli": "tsx apps/cli/src/index.ts",
+    "test": "tsx tests/router-foundation.test.ts",
+    "install:local": "npm run build && npm link && node scripts/finalize-linked-cli.mjs",
+    "uninstall:local": "npm unlink --global routis",
+    "prepack": "npm run build",
+    "verify:release": "npm run build && npm test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  },
+  "dependencies": {
+    "yaml": "^2.8.0"
+  }
+}

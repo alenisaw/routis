@@ -1,15 +1,82 @@
 name: default
-description: Default preset for early local use.
+description: Dynamic auto-selection preset for normal CLI usage.
 
-route: balanced
-explanation: short
-budget: moderate
+execution:
+  model: dynamic
+  reasoning: dynamic
+
+behavior:
+  mode: dynamic
+  baseline_profile: balanced
+  default_route: balanced
+
+signals:
+  cheap:
+    - typo
+    - rename
+    - format
+    - wording
+    - comment cleanup
+    - explain snippet
+    - quick summary
+    - tiny fix
+    - small edit
+  balanced:
+    - implement
+    - refactor
+    - add feature
+    - write tests
+    - improve
+    - update
+    - review
+    - extend
+    - add flag
+    - load config
+    - adjust validation
+    - improve cli
+  deep:
+    - debug
+    - root cause
+    - architecture
+    - migration
+    - security
+    - cross-file
+    - investigate
+    - concurrency
+    - edge case
+    - flaky behavior
+    - production issue
+    - uncertainty
+  extradeep:
+    - redesign routing
+    - major architecture change
+    - policy/schema redesign
+    - hard multi-file debugging
+    - unclear core failure
+    - large refactor across layers
+    - deeply uncertain system behavior
+
+cues:
+  upgrade:
+    - across files
+    - migration
+    - production
+    - root cause
+    - security
+    - uncertain
+    - intermittent
+    - redesign
+    - architecture
+    - multiple modules
+  downgrade:
+    - small
+    - minor
+    - quick
+    - simple
+    - just
+    - tiny
 
 output:
   lean_output: true
   silent_success: true
   patch_first: true
-
-context:
-  compact: true
-  preserve_pinned_facts: true

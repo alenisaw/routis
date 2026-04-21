@@ -1,5 +1,5 @@
 # Codex Adapter Package
 
-Intended home for Codex-specific integration.
+Home for thin Codex-specific integration.
 
-The goal is to keep Codex-facing details out of the routing core.
+This package maps an effective Routis profile into a Codex CLI execution plan, generates the exact command Routis would run, and handles optional execution.

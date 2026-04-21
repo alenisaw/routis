@@ -1,5 +1,5 @@
 # Core Package
 
-Intended home for the routing core.
+Home for the routing core.
 
-This package should eventually hold the basic decision flow and shared routing primitives.
+This package contains the rule-based classifier, dynamic profile recommendation, and final route selection logic that feeds the Codex adapter.

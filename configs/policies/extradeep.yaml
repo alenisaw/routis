@@ -1,14 +1,14 @@
-name: deep
-description: Deep preset for debugging, investigation, and riskier work.
+name: extradeep
+description: Extra-deep preset for redesigns, core failures, and deeply uncertain work.
 
 execution:
   model: gpt-5.4
-  reasoning: high
+  reasoning: xhigh
 
 behavior:
   mode: fixed
-  baseline_profile: deep
-  default_route: deep
+  baseline_profile: extradeep
+  default_route: extradeep
 
 signals:
   cheap:

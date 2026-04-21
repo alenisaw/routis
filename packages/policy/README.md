@@ -1,5 +1,5 @@
 # Policy Package
 
-Intended home for policy loading and policy definitions.
+Home for policy loading and policy definitions.
 
-The current policy files in `configs/policies/` are early placeholders for this area.
+This package loads YAML policy presets, normalizes them into small internal types, and provides the execution settings used by the CLI and Codex adapter.
