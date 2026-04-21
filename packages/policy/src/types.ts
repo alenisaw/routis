@@ -76,6 +76,11 @@ export interface RawPolicyConfig {
   };
 }
 
+export interface RawRoutingConfig {
+  signals?: RawPolicyConfig["signals"];
+  cues?: RawPolicyConfig["cues"];
+}
+
 export function toRouteLabel(profile: EffectiveProfile): RouteLabel {
   switch (profile) {
     case "cheap":

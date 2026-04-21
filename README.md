@@ -209,7 +209,7 @@ It is not trying to be clever. It is trying to be easy to inspect and easy to tu
 routis/
   apps/cli/                CLI entrypoint
   bin/                     linked CLI wrapper
-  configs/policies/        YAML policy presets
+  configs/policies/        YAML policy presets and shared routing rules
   packages/codex-adapter/  thin Codex command planning and execution
   packages/core/           classification and route selection
   packages/policy/         policy types and loading

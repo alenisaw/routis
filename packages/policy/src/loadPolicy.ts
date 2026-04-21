@@ -12,6 +12,7 @@ import {
   type PolicyConfig,
   type PolicyName,
   type RawPolicyConfig,
+  type RawRoutingConfig,
   type ReasoningLevel
 } from "./types.js";
 
@@ -41,6 +42,17 @@ function readStringList(value: unknown, fieldName: string): string[] {
   }
 
   return value.map((entry) => entry.toLowerCase());
+}
+
+async function readYamlObject(filePath: string, label: string): Promise<Record<string, unknown>> {
+  const contents = await readFile(filePath, "utf8");
+  const parsed = parse(contents);
+
+  if (!isObject(parsed)) {
+    throw new Error(`${label} must contain an object at the top level.`);
+  }
+
+  return parsed;
 }
 
 function normalizePolicyName(value: unknown): PolicyName {
@@ -105,6 +117,45 @@ function buildPolicyPath(policyName: PolicyName): string {
   return path.resolve(process.cwd(), "configs", "policies", `${policyName}.yaml`);
 }
 
+function buildRoutingPath(policyPath: string): string {
+  return path.resolve(path.dirname(policyPath), "routing.yaml");
+}
+
+async function loadSharedRouting(policyPath: string): Promise<RawRoutingConfig | undefined> {
+  try {
+    return (await readYamlObject(buildRoutingPath(policyPath), "Routing file")) as RawRoutingConfig;
+  } catch (error: unknown) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+function mergeRoutingSection(
+  policySection: unknown,
+  sharedSection: unknown,
+  fieldName: "signals" | "cues"
+): Record<string, unknown> {
+  if (policySection !== undefined && !isObject(policySection)) {
+    throw new Error(`Policy field "${fieldName}" must be an object.`);
+  }
+
+  if (sharedSection !== undefined && !isObject(sharedSection)) {
+    throw new Error(`Routing field "${fieldName}" must be an object.`);
+  }
+
+  if (policySection === undefined && sharedSection === undefined) {
+    throw new Error(`Policy field "${fieldName}" must be an object or routing.yaml must provide it.`);
+  }
+
+  return {
+    ...(isObject(sharedSection) ? sharedSection : {}),
+    ...(isObject(policySection) ? policySection : {})
+  };
+}
+
 export function getAvailablePolicyNames(): PolicyName[] {
   return [...policyNames];
 }
@@ -115,12 +166,8 @@ export function isPolicyName(value: string): value is PolicyName {
 
 export async function loadPolicy(policyPath: string): Promise<PolicyConfig> {
   const resolvedPath = path.resolve(process.cwd(), policyPath);
-  const contents = await readFile(resolvedPath, "utf8");
-  const parsed = parse(contents) as RawPolicyConfig;
-
-  if (!isObject(parsed)) {
-    throw new Error("Policy file must contain an object at the top level.");
-  }
+  const parsed = (await readYamlObject(resolvedPath, "Policy file")) as RawPolicyConfig;
+  const sharedRouting = await loadSharedRouting(resolvedPath);
 
   if (!isObject(parsed.execution)) {
     throw new Error('Policy field "execution" must be an object.');
@@ -130,17 +177,12 @@ export async function loadPolicy(policyPath: string): Promise<PolicyConfig> {
     throw new Error('Policy field "behavior" must be an object.');
   }
 
-  if (!isObject(parsed.signals)) {
-    throw new Error('Policy field "signals" must be an object.');
-  }
-
-  if (!isObject(parsed.cues)) {
-    throw new Error('Policy field "cues" must be an object.');
-  }
-
   if (!isObject(parsed.output)) {
     throw new Error('Policy field "output" must be an object.');
   }
+
+  const signals = mergeRoutingSection(parsed.signals, sharedRouting?.signals, "signals");
+  const cues = mergeRoutingSection(parsed.cues, sharedRouting?.cues, "cues");
 
   return {
     name: normalizePolicyName(parsed.name),
@@ -155,14 +197,14 @@ export async function loadPolicy(policyPath: string): Promise<PolicyConfig> {
       defaultRoute: normalizeEffectiveProfile(parsed.behavior.default_route, "behavior.default_route")
     },
     signals: {
-      cheap: readStringList(parsed.signals.cheap, "signals.cheap"),
-      balanced: readStringList(parsed.signals.balanced, "signals.balanced"),
-      deep: readStringList(parsed.signals.deep, "signals.deep"),
-      extradeep: readStringList(parsed.signals.extradeep, "signals.extradeep")
+      cheap: readStringList(signals.cheap, "signals.cheap"),
+      balanced: readStringList(signals.balanced, "signals.balanced"),
+      deep: readStringList(signals.deep, "signals.deep"),
+      extradeep: readStringList(signals.extradeep, "signals.extradeep")
     },
     cues: {
-      upgrade: readStringList(parsed.cues.upgrade, "cues.upgrade"),
-      downgrade: readStringList(parsed.cues.downgrade, "cues.downgrade")
+      upgrade: readStringList(cues.upgrade, "cues.upgrade"),
+      downgrade: readStringList(cues.downgrade, "cues.downgrade")
     },
     output: {
       leanOutput: readBoolean(parsed.output.lean_output, "output.lean_output"),

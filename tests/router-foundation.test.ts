@@ -18,9 +18,12 @@ async function main(): Promise<void> {
   assert.equal(defaultPolicy.execution.model, "dynamic");
   assert.equal(defaultPolicy.execution.reasoning, "dynamic");
   assert.equal(defaultPolicy.behavior.mode, "dynamic");
+  assert.ok(defaultPolicy.signals.extradeep.includes("redesign routing"));
+  assert.ok(defaultPolicy.cues.upgrade.includes("architecture"));
 
   assert.equal(cheapPolicy.execution.model, "gpt-5.4-mini");
   assert.equal(cheapPolicy.execution.reasoning, "none");
+  assert.ok(cheapPolicy.signals.cheap.includes("typo"));
 
   assert.equal(balancedPolicy.execution.model, "gpt-5.4");
   assert.equal(balancedPolicy.execution.reasoning, "medium");
