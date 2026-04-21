@@ -6,6 +6,7 @@ import { prepareCodexCommand } from "../packages/codex-adapter/src/prepareCodexC
 import { classifyTask } from "../packages/core/src/classifyTask.js";
 import { selectRoute } from "../packages/core/src/selectRoute.js";
 import { loadPolicyPreset, loadPolicyPresetByName } from "../packages/policy/src/loadPolicy.js";
+import packageJson from "../package.json" with { type: "json" };
 
 async function main(): Promise<void> {
   const defaultPolicy = await loadPolicyPreset("default");
@@ -111,7 +112,7 @@ async function main(): Promise<void> {
       throw new Error("version CLI run should not exit");
     }
   });
-  assert.deepEqual(versionOutput, ["0.1.0"]);
+  assert.deepEqual(versionOutput, [packageJson.version]);
 
   const defaultOutput: string[] = [];
   await runCli(["--policy", "default", "redesign routing architecture across files"], {

@@ -13,7 +13,7 @@ import {
 } from "../../../packages/policy/src/loadPolicy.js";
 import type { EffectiveProfile, PolicyConfig, PolicyName } from "../../../packages/policy/src/types.js";
 
-const CLI_VERSION = "0.1.0";
+const CLI_VERSION = "0.1.1";
 
 export interface CliRuntime {
   write: (line: string) => void;

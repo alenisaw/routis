@@ -8,6 +8,12 @@ coverage/
 .routis/
 .tmp-codex-home/
 .tmp-codex-home*/
+.tmp-pack/
+.tmp-pack-prefix/
+.tmp-npm-prefix/
+.tmp-remote-tag/
+.tmp-release-repo/
+.tmp-git-prefix/
 
 # Logs
 *.log

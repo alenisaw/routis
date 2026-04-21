@@ -41,8 +41,7 @@ No desktop app, no telemetry, and no app-server integration.
 ## Quickstart
 
 ```bash
-npm install
-npm run install:local
+npm install -g @alenisaw/routis
 routis --policy default "redesign routing architecture across files"
 ```
 
@@ -79,15 +78,23 @@ Requirements:
 - Node.js 20+
 - npm
 
-Project setup:
+Install from npm:
+
+```bash
+npm install -g @alenisaw/routis
+```
+
+Check the installation:
+
+```bash
+routis --version
+routis --help
+```
+
+For local development from the repository:
 
 ```bash
 npm install
-```
-
-Expose the local CLI as a normal shell command:
-
-```bash
 npm run install:local
 ```
 
@@ -101,7 +108,7 @@ If you prefer to keep the generated PowerShell shim enabled for the current sess
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
-Remove the link later with:
+Remove the local development link later with:
 
 ```bash
 npm run uninstall:local

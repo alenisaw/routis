@@ -1,6 +1,20 @@
 # Changelog
 
-## [0.1.0] - Unreleased
+## [0.1.1] - Unreleased
+
+### Fixed
+
+- corrected the release packaging path after the incomplete `v0.1.0` tag content
+- fixed installability for standard release packaging and npm publication
+- aligned package metadata for public distribution and release verification
+
+### Changed
+
+- moved the published package name to `@alenisaw/routis` while keeping the CLI command name as `routis`
+- added publish-ready npm metadata and public access configuration
+- added publish-time verification so release builds and smoke tests run before npm publish
+
+## [0.1.0] - Released
 
 First public CLI router release candidate.
 
@@ -12,7 +26,6 @@ First public CLI router release candidate.
 - explainable rule-based classification and route selection
 - thin Codex adapter that prepares and optionally executes the Codex CLI command
 - local shell installation through `npm link`
-- Windows install finalization so `routis` works as the primary PowerShell command after local install
 - lightweight smoke tests for policy loading, routing, adapter planning, and failure handling
 
 ### Changed
