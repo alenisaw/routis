@@ -1,0 +1,33 @@
+[workspace]
+members = [
+  "crates/routis-core",
+  "crates/routis-policy"
+]
+resolver = "2"
+
+[package]
+name = "routis"
+version = "0.1.0"
+edition = "2021"
+authors = ["Alen Issayev"]
+description = "Policy-aware CLI for routing AI coding tasks."
+license = "Apache-2.0"
+repository = "https://github.com/alenisaw/routis"
+readme = "README.md"
+keywords = ["cli", "ai", "codex", "routing", "developer-tools"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "routis"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+routis-core = { version = "0.1.0", path = "crates/routis-core" }
+routis-policy = { version = "0.1.0", path = "crates/routis-policy" }
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+tempfile = "3.10"

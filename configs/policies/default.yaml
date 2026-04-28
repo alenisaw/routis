@@ -1,0 +1,18 @@
+version: 1
+
+profiles:
+  cheap:
+    model: gpt-5.4-mini
+    reasoning: low
+
+  balanced:
+    model: gpt-5.5
+    reasoning: medium
+
+  deep:
+    model: gpt-5.5
+    reasoning: high
+
+  extradeep:
+    model: gpt-5.5
+    reasoning: xhigh

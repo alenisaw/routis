@@ -5,111 +5,70 @@
 <h1 align="center">Routis</h1>
 
 <p align="center">
-  <strong>Adaptive execution intelligence for AI coding workflows.</strong>
+  <strong>Adaptive execution routing for AI coding workflows.</strong>
 </p>
 
 <p align="center">
   <a href="https://github.com/alenisaw/routis/stargazers"><img src="https://img.shields.io/github/stars/alenisaw/routis?style=flat&color=F4C430" alt="Stars"></a>
   <a href="https://github.com/alenisaw/routis/commits/main"><img src="https://img.shields.io/github/last-commit/alenisaw/routis?style=flat" alt="Last Commit"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/alenisaw/routis?style=flat&color=97CA00" alt="License"></a>
+  <a href="https://github.com/alenisaw/routis/actions"><img src="https://img.shields.io/github/actions/workflow/status/alenisaw/routis/ci.yml?branch=main&label=ci" alt="CI"></a>
 </p>
 
 <p align="center">
-  <a href="#why-it-exists">Why it exists</a> ·
-  <a href="#capabilities">Capabilities</a> ·
-  <a href="#how-it-works">How it works</a> ·
-  <a href="#installation">Installation</a> ·
-  <a href="#usage">Usage</a> ·
-  <a href="#development">Development</a>
+  <a href="#why-routis">Why Routis</a>
+  | <a href="#capabilities">Capabilities</a>
+  | <a href="#installation">Installation</a>
+  | <a href="#usage">Usage</a>
+  | <a href="#policy-file">Policy File</a>
+  | <a href="#development">Development</a>
 </p>
 
 ---
 
-Routis is an **execution-intelligence layer** for AI coding workflows.
+Routis is an execution-intelligence layer for AI coding workflows.
 
-It adds a routing layer before execution. Given a task, Routis evaluates the request, reads useful project signals, applies local policy, selects an execution route, prepares a command preview, and records the decision for later inspection.
+It adds a deliberate routing step before execution. Given a task, Routis evaluates the request, applies local policy, selects an execution profile, prepares a Codex command preview, and explains why that route was chosen.
 
-The point is simple: AI-assisted development should not use the same execution path for every task. Small edits should stay lightweight. Risky changes should receive stronger handling. Project context should be selected deliberately. Every routing decision should be understandable after the fact.
+The point is simple: AI-assisted development should not use the same execution path for every task. Small edits should stay lightweight. Risky changes should receive stronger handling. Model choice, reasoning depth, and command shape should be explicit instead of hidden in shell habits.
 
-## Why it exists
+## Why Routis
 
-AI coding tools usually receive a prompt and start working immediately. That is convenient, but it makes execution inconsistent. The model, reasoning level, context scope, and command shape are often chosen manually or left to defaults.
+AI coding tasks do not all deserve the same execution depth. A typo fix, a focused implementation task, and a risky debugging session should not be routed through identical model and reasoning settings.
 
-Routis makes that decision explicit. It turns task handling into a routing step that can be inspected, repeated, tuned, and stored locally.
+Routis makes that decision explicit:
 
-| Problem | Routis response |
-|---|---|
-| Same settings for different tasks | Route each task into an execution profile |
-| Too much context for small edits | Keep lightweight tasks cheap and focused |
-| Shallow handling of risky changes | Elevate tasks touching sensitive areas |
-| Unclear command decisions | Produce an explainable route |
-| Hard-to-review sessions | Store local traces and session records |
-| Project-specific habits | Apply local policy files |
+- **Classify the task** into a clear execution profile.
+- **Keep simple tasks lightweight** with cheaper routing.
+- **Raise effort for risky work** such as debugging, migrations, security, and architecture changes.
+- **Keep command generation inspectable** before execution.
+- **Move model and reasoning choices into policy files** instead of hard-coding them into shell habits.
 
 ## Capabilities
 
-Routis combines routing, context control, policy, explainability, and local records into one workflow layer.
-
 | Capability | What it does |
 |---|---|
-| Adaptive routing | Selects a fitting execution profile for the task |
-| Context control | Uses repository signals without blindly loading everything |
-| Risk detection | Recognizes sensitive zones such as config, auth, schema, workflow, and package files |
-| Policy control | Applies local routing rules and project-specific overrides |
-| Dry run | Shows the route and command preview before execution |
-| Explain mode | Shows which signals influenced the selected route |
-| Sessions | Keeps continuity across related tasks |
-| Traces | Records routing decisions as reviewable local artifacts |
-| Token economy | Reduces unnecessary context, reasoning depth, and repeated work |
+| Rule-based routing | Selects an execution profile from task wording |
+| Execution profiles | Supports `cheap`, `balanced`, `deep`, `extradeep`, and `default` |
+| Dry-run first | Prints the selected route and Codex command without running it |
+| Codex execution | Runs the planned Codex command when `--execute` is passed |
+| Explain mode | Shows matched signals and the routing reason |
+| YAML policy | Loads model and reasoning mappings from `configs/policies/default.yaml` or a custom file |
+| CI and release workflows | Checks format, lint, tests, and release builds on GitHub Actions |
 
-Profiles stay intentionally simple.
+## Profiles
 
 | Profile | Typical use |
 |---|---|
 | `cheap` | Typos, formatting, comments, small documentation edits |
 | `balanced` | Ordinary implementation, tests, focused refactors |
-| `deep` | Debugging, migrations, edge cases, config/auth/schema work |
+| `deep` | Debugging, migrations, edge cases, security-sensitive work |
 | `extradeep` | Redesigns, rewrites, architecture-level changes |
-| `default` | Automatic selection from task and project signals |
-
-## How it works
-
-Routis handles a task as a routing pipeline.
-
-```mermaid
-flowchart LR
-    A[Task] --> B[Signals]
-    B --> C[Policy]
-    C --> D[Route]
-    D --> E[Command]
-    D --> F[Explanation]
-    D --> G[Trace]
-
-    B --> B1[Task wording]
-    B --> B2[Changed files]
-    B --> B3[Risk zones]
-    B --> B4[Context hints]
-```
-
-The pipeline starts with the task text and lightweight project signals. Routis checks task wording, requested intent, file references, changed files, and known risk zones. Those signals are combined with local policy rules. The result is an execution route: selected profile, execution mode, command preview, explanation text, and trace metadata.
-
-A route is designed to be readable.
-
-```text
-Requested profile:  default
-Effective profile:  deep
-Signals matched:    debug, config
-Risk zones:         config
-Mode:               dry-run
-Reason:             task asks for debugging and touches a risk zone
-Command preview:    codex exec --reasoning high -- "debug config loader"
-```
-
-The trace makes the decision auditable without turning the repository into a prompt dump. It stores the routing outcome and the signals that shaped it, while sensitive task content can be represented as a hash.
+| `default` | Automatic selection from task wording |
 
 ## Installation
 
-For now, build Routis from source.
+Build from source:
 
 ```bash
 git clone https://github.com/alenisaw/routis.git
@@ -117,111 +76,115 @@ cd routis
 cargo build --release
 ```
 
-Run the compiled binary.
+Run the compiled binary:
 
 ```bash
 ./target/release/routis --help
 ```
 
-Install it locally from the repository.
+Install locally from the repository:
 
 ```bash
 cargo install --path .
 ```
 
-After local installation, the `routis` command becomes available from the shell.
-
-```bash
-routis --help
-```
-
 ## Usage
 
-Route a task automatically.
+Route a task automatically:
 
 ```bash
 routis "fix typo in README"
 ```
 
-Preview the route without execution.
+Pass the task with a flag:
 
 ```bash
-routis --dry-run "refactor routing module"
+routis --task "debug auth flow"
 ```
 
-Show routing details.
+Show routing details:
 
 ```bash
-routis --explain "investigate auth regression"
+routis --task "debug auth flow" --explain
 ```
 
-Force a profile when the route is known in advance.
+Force a profile:
 
 ```bash
-routis --profile deep "debug failing config loader"
+routis --policy deep "debug failing config loader"
 ```
 
-Use a policy file.
+Use a policy file:
 
 ```bash
 routis --policy-file ./configs/policies/default.yaml "update config loader"
 ```
 
-Open the interactive interface.
+Execute the generated Codex command:
 
 ```bash
-routis tui
+routis --execute "implement config loader"
 ```
 
-### CLI shape
+Without `--execute`, Routis stays in dry-run mode.
 
-```bash
-routis [OPTIONS] [TASK]
+## CLI Reference
+
+```text
+routis [OPTIONS] [TASK]...
+
+Arguments:
+  [TASK]...  Positional task text
 
 Options:
-  --task <TEXT>           Task to route
-  --profile <PROFILE>     cheap | balanced | deep | extradeep | default
-  --policy-file <PATH>    Load routing policy from a file
-  --dry-run               Print the route without executing
-  --execute               Execute the generated command
-  --explain               Show routing details
-  --help                  Print help
-  --version               Print version
+      --task <TASK>         Task to route
+      --policy <POLICY>     Policy profile: cheap | balanced | deep | extradeep | default
+      --policy-file <PATH>  Load execution policy from a YAML file
+      --dry-run             Plan only, do not execute
+      --execute             Execute the planned Codex command
+      --explain             Show expanded routing detail
+  -h, --help                Print help
+  -V, --version             Print version
 ```
 
-### Policy example
+## Output Example
+
+```text
+Requested policy:  default
+Effective profile: deep
+Codex command:     codex exec -m gpt-5.5 --reasoning high -- "debug auth flow"
+Execution mode:    dry-run
+
+Signals matched:   ["debug"]
+Routing reason:    Auto-selected `deep` from signals: debug.
+```
+
+## Policy File
+
+Default policy file: `configs/policies/default.yaml`.
 
 ```yaml
 version: 1
-profile: default
 
-rules:
-  - if_signal: redesign
-    then: extradeep
+profiles:
+  cheap:
+    model: gpt-5.4-mini
+    reasoning: low
 
-  - if_risk_zone: config
-    then: deep
+  balanced:
+    model: gpt-5.5
+    reasoning: medium
 
-  - if_changed_files_over: 12
-    then: deep
+  deep:
+    model: gpt-5.5
+    reasoning: high
+
+  extradeep:
+    model: gpt-5.5
+    reasoning: xhigh
 ```
 
 ## Development
-
-
-Build:
-
-```bash
-cargo build
-```
-
-Run locally:
-
-```bash
-cargo run -- "fix typo in README"
-cargo run -- --explain "debug failing route selection"
-cargo run -- tui
-```
 
 Run checks:
 
@@ -229,6 +192,14 @@ Run checks:
 cargo fmt --check
 cargo clippy -- -D warnings
 cargo test
+cargo build --release
+```
+
+Run locally:
+
+```bash
+cargo run -- "fix typo in README"
+cargo run -- --explain "debug failing route selection"
 ```
 
 ## License
