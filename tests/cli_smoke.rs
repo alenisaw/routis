@@ -124,11 +124,12 @@ fn positional_and_flag_task_conflict() {
 }
 
 #[test]
-fn missing_task_fails_with_hint() {
+fn help_documents_task_argument_without_launching_tui() {
     let mut cmd = Command::cargo_bin("routis").unwrap();
-    cmd.assert()
-        .failure()
-        .stderr(predicate::str::contains("missing task"));
+    cmd.arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("[TASK]"));
 }
 
 #[test]

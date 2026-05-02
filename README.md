@@ -46,15 +46,19 @@ Routis makes that decision explicit:
 
 ## Capabilities
 
+Routis combines routing, context control, policy, explainability, and local records into one workflow layer.
+
 | Capability | What it does |
 |---|---|
-| Rule-based routing | Selects an execution profile from task wording |
-| Execution profiles | Supports `cheap`, `balanced`, `deep`, `extradeep`, and `default` |
-| Dry-run first | Prints the selected route and Codex command without running it |
-| Codex execution | Runs the planned Codex command when `--execute` is passed |
-| Explain mode | Shows matched signals and the routing reason |
-| YAML policy | Loads model and reasoning mappings from `configs/policies/default.yaml` or a custom file |
-| CI and release workflows | Checks format, lint, tests, and release builds on GitHub Actions |
+| Adaptive routing | Selects a fitting execution profile for the task |
+| Context control | Uses repository signals without blindly loading everything |
+| Risk detection | Recognizes sensitive zones such as config, auth, schema, workflow, and package files |
+| Policy control | Applies local routing rules and project-specific overrides |
+| Dry run | Shows the route and command preview before execution |
+| Explain mode | Shows which signals influenced the selected route |
+| Sessions | Keeps continuity across related tasks |
+| Traces | Records routing decisions as reviewable local artifacts |
+| Token economy | Reduces unnecessary context, reasoning depth, and repeated work |
 
 ## Profiles
 
@@ -88,7 +92,57 @@ Install locally from the repository:
 cargo install --path .
 ```
 
+After local installation, the binary is available as `routis`:
+
+```bash
+routis
+```
+
+Running `routis` without a task opens the interactive TUI console. Cargo installs the binary into Cargo's bin directory, usually `~/.cargo/bin` on Linux/macOS and `%USERPROFILE%\.cargo\bin` on Windows. Make sure that directory is on `PATH`.
+
 ## Usage
+
+Open the interactive terminal shell:
+
+```bash
+routis
+```
+
+The TUI starts when no task is passed. It provides:
+
+- a responsive dashboard with provider, model, reasoning, metrics, updates, and recent sessions;
+- a timeline for command results and local execution previews;
+- a slash command palette;
+- searchable session selection;
+- inline theme and provider pickers;
+- provider diagnostics for the local Codex CLI.
+
+Useful TUI keys:
+
+| Key | Action |
+|---|---|
+| `/` | Open the command palette |
+| `Enter` | Submit input or confirm the selected item |
+| `Esc` | Close the current palette, picker, or session view |
+| `Ctrl+C` | Cancel the current task or clear input |
+| `Ctrl+D` | Exit Routis |
+| `?` | Toggle keyboard shortcuts |
+
+Useful TUI commands:
+
+| Command | What it does |
+|---|---|
+| `/help` | Show keyboard shortcuts |
+| `/status` | Show provider, model, reasoning, and theme |
+| `/setup` | Open the local setup flow |
+| `/doctor` | Check Codex CLI availability, version, auth status, and config path |
+| `/provider` | Open the provider picker and diagnostics |
+| `/theme` | Open the theme picker with live preview |
+| `/sessions` | Open searchable recent-session selection |
+| `/history` | Show local history status |
+| `/clear` | Clear the current TUI timeline |
+| `/config` | Show the local config path |
+| `/quit` | Exit Routis |
 
 Route a task automatically:
 
@@ -127,6 +181,14 @@ routis --execute "implement config loader"
 ```
 
 Without `--execute`, Routis stays in dry-run mode.
+
+Launch the v0.2.0 TUI:
+
+```bash
+routis
+```
+
+The TUI stores local config under `~/.routis/config.toml` and recent prompt history under `~/.routis/shell_history`. Provider diagnostics locate `codex` from the system PATH and run `codex --version`; on Windows, Routis prefers executable shims such as `.cmd` or `.exe` over blocked PowerShell scripts.
 
 ## CLI Reference
 
@@ -200,6 +262,7 @@ Run locally:
 ```bash
 cargo run -- "fix typo in README"
 cargo run -- --explain "debug failing route selection"
+cargo run
 ```
 
 ## License

@@ -7,7 +7,7 @@ resolver = "2"
 
 [package]
 name = "routis"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["Alen Issayev"]
 description = "Policy-aware CLI for routing AI coding tasks."
@@ -24,8 +24,13 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
+crossterm = { version = "0.28", features = ["event-stream"] }
+ratatui = "0.29"
 routis-core = { version = "0.1.0", path = "crates/routis-core" }
 routis-policy = { version = "0.1.0", path = "crates/routis-policy" }
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+unicode-width = "0.1"
 
 [dev-dependencies]
 assert_cmd = "2.0"

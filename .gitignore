@@ -5,6 +5,20 @@ Cargo.lock.bak
 .routis/
 .agent/
 
+# Agent graph artifacts
+graphify-out/
+.graphify_*
+
+# Archives
+*.7z
+*.bz2
+*.gz
+*.rar
+*.tar
+*.tgz
+*.xz
+*.zip
+
 # Environment files
 .env
 .env.*

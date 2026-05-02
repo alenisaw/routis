@@ -3,6 +3,12 @@
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
+use crossterm::{
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use ratatui::{backend::CrosstermBackend, Terminal};
+use routis::tui::app::run_app;
 use routis_core::{route_task, Profile, RoutingDecision};
 use routis_policy::{build_codex_command, format_command, PolicyFile};
 use std::{path::PathBuf, process::Command, str::FromStr};
@@ -42,9 +48,12 @@ struct Args {
     positional_task: Vec<String>,
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = Args::parse();
-    let task = resolve_task(&args)?;
+    let Some(task) = resolve_task(&args)? else {
+        return run_tui().await;
+    };
     let requested_profile = Profile::from_str(&args.policy)?;
     let policy = PolicyFile::load(&args.policy_file).with_context(|| {
         format!(
@@ -68,13 +77,37 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn resolve_task(args: &Args) -> Result<String> {
+fn resolve_task(args: &Args) -> Result<Option<String>> {
     match (&args.task, args.positional_task.is_empty()) {
         (Some(_), false) => bail!("use either --task <TEXT> or positional TASK, not both"),
-        (Some(task), true) => Ok(task.clone()),
-        (None, false) => Ok(args.positional_task.join(" ")),
-        (None, true) => bail!("missing task; pass --task <TEXT> or a positional TASK"),
+        (Some(task), true) => Ok(Some(task.clone())),
+        (None, false) => Ok(Some(args.positional_task.join(" "))),
+        (None, true) => Ok(None),
     }
+}
+
+async fn run_tui() -> Result<()> {
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let _ = disable_raw_mode();
+        let _ = execute!(std::io::stdout(), LeaveAlternateScreen);
+        original_hook(info);
+    }));
+
+    enable_raw_mode()?;
+    let mut stdout = std::io::stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+    terminal.clear()?;
+
+    let result = run_app(&mut terminal).await;
+
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
+
+    result
 }
 
 fn print_decision(
