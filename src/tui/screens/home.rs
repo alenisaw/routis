@@ -10,7 +10,6 @@ use crate::tui::{
 };
 use ratatui::{
     layout::{Constraint, Layout, Margin, Rect},
-    style::Stylize,
     text::{Line, Span},
     widgets::{Paragraph, Wrap},
     Frame,

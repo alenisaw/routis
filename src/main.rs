@@ -87,6 +87,10 @@ fn resolve_task(args: &Args) -> Result<Option<String>> {
 }
 
 async fn run_tui() -> Result<()> {
+    if std::env::var_os("ROUTIS_TUI_SMOKE_EXIT").is_some() {
+        return Ok(());
+    }
+
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let _ = disable_raw_mode();

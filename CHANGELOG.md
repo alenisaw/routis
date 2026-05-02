@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.1 - TUI CI Smoke Fix - 2026-05-03
+
+This patch release fixes TUI smoke testing in non-interactive CI environments.
+
+### Fixed
+
+- Fixed `ROUTIS_TUI_SMOKE_EXIT` so the binary exits before raw mode and alternate-screen terminal initialization.
+- Fixed CI smoke coverage for Ubuntu, macOS, and Windows runners without an attached TTY.
+- Fixed the Dependabot `lru` advisory by updating `ratatui` to `0.30.0`, which resolves `lru` to `0.16.4`.
+- Kept normal interactive TUI startup unchanged for local terminal use.
+
 ## 0.2.0 - Ratatui TUI Shell - 2026-05-03
 
 This release adds the first Routis terminal UI shell while keeping the 0.1.0 one-shot CLI routing path unchanged. The CLI still routes tasks, applies policy files, prints Codex command previews, supports dry-run by default, and executes only when explicitly requested.

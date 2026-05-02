@@ -1,4 +1,4 @@
-use ratatui::style::{Color, Style, Stylize};
+use ratatui::style::{Color, Style};
 
 /// Full terminal colour palette.  Every field is set for *every* theme —
 /// we no longer silently inherit defaults for dim/surface/text.

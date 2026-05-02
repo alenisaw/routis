@@ -7,7 +7,7 @@ use crate::tui::{
 };
 use ratatui::{
     layout::{Alignment, Constraint, Layout, Rect},
-    style::{Color, Style, Stylize},
+    style::{Color, Style},
     text::{Line, Span},
     widgets::{Paragraph, Wrap},
     Frame,
