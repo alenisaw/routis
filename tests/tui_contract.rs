@@ -694,13 +694,33 @@ fn session_timeline_uses_plain_routis_execution_flow() {
     assert!(!text.contains("debug-auth-flow"));
     assert!(text.contains("You"));
     assert!(text.contains("Routis"));
-    assert!(text.contains("Command preview"));
-    assert!(text.contains("codex exec"));
+    assert!(text.contains("Prompt: \"debug auth flow\""));
+    assert!(text.contains("Profile: deep"));
+    assert!(text.contains("Model: gpt-5.5  reasoning: high"));
+    assert!(!text.contains("Command preview"));
+    assert!(!text.contains("codex exec"));
     assert!(text.contains("Awaiting confirmation"));
     assert!(text.contains("├─"));
     assert!(text.contains("└─"));
     assert!(!text.contains("Security policy"));
     assert!(!text.contains("security-strict"));
+}
+
+#[test]
+fn awaiting_confirmation_shows_input_choices() {
+    let mut state = AppState::home();
+    state.ui.input = "debug auth flow".to_string();
+    handle_key_for_test(
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+    for _ in 0..8 {
+        tick_for_test(&mut state);
+    }
+
+    let text = render_to_text(150, 44, &state);
+
+    assert!(text.contains("[proceed] / [cancel]"));
 }
 
 #[test]

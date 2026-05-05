@@ -1,4 +1,7 @@
-use crate::tui::{state::AppState, theme::ThemePalette};
+use crate::tui::{
+    state::{AppState, SessionPhase},
+    theme::ThemePalette,
+};
 use ratatui::{
     layout::Rect,
     text::{Line, Span},
@@ -8,13 +11,19 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 pub fn render_input(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
-    let raw = if state.ui.input.is_empty() {
+    let awaiting_confirmation =
+        state.session.phase == SessionPhase::AwaitingConfirmation && state.ui.input.is_empty();
+    let raw = if awaiting_confirmation {
+        "[proceed] / [cancel]".to_string()
+    } else if state.ui.input.is_empty() {
         "Type a task or / for commands...".to_string()
     } else {
         state.ui.input.clone()
     };
     let value = clip_to_width(&raw, area.width as usize);
-    let value_style = if state.ui.input.is_empty() {
+    let value_style = if awaiting_confirmation {
+        palette.warning().bold()
+    } else if state.ui.input.is_empty() {
         palette.dim()
     } else {
         palette.text()

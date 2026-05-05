@@ -144,6 +144,8 @@ fn detail_style(line: &str, palette: ThemePalette) -> Style {
         palette.warning()
     } else if line.contains("cancel") || line.contains("error") || line.contains("Error") {
         palette.error()
+    } else if line.starts_with("Prompt:") {
+        palette.cyan().italic()
     } else if line.contains("codex exec") || line.contains("Command preview") {
         palette.cyan()
     } else if line.contains("checked") || line.contains("resolved") || line.contains("Found") {

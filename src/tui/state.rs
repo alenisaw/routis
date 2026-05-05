@@ -347,6 +347,7 @@ impl AppState {
 
     pub fn start_session(&mut self, task: &str, title: String) {
         let task = task.trim();
+        let plan = execution_plan(task, self);
         let mut events = std::mem::take(&mut self.session.events);
         self.mode = AppMode::Session;
         self.session.title = title;
@@ -363,8 +364,8 @@ impl AppState {
         self.metrics.input_tokens = estimate_input_tokens(task, &self.config);
         self.metrics.output_tokens = 0;
         self.metrics.total_tokens = self.metrics.input_tokens;
-        self.metrics.context_percent = 18;
-        self.metrics.saved_percent = 32;
+        self.metrics.context_percent = plan.context_percent;
+        self.metrics.saved_percent = plan.saved_percent;
         events.extend([
             SessionEvent {
                 source: "You".to_string(),
@@ -375,21 +376,17 @@ impl AppState {
                 source: "Routis".to_string(),
                 title: "Preparing local execution plan".to_string(),
                 lines: vec![
-                    format!("Task: {task}"),
+                    format!("Prompt: \"{task}\""),
                     format!("Provider: {}", self.config.provider),
-                    format!(
-                        "Model: {}  reasoning: {}",
-                        self.config.model, self.config.reasoning
-                    ),
-                    format!(
-                        "Command preview: codex exec -m {} --reasoning {} -- \"{}\"",
-                        self.config.model, self.config.reasoning, task
-                    ),
+                    format!("Profile: {}", plan.profile),
+                    format!("Model: {}  reasoning: {}", plan.model, plan.reasoning),
+                    format!("Repo: {} changed files", plan.changed_files),
+                    format!("Risk zones: {}", plan.risk_zones),
                 ],
             },
             SessionEvent {
                 source: "Codex CLI".to_string(),
-                title: "Ready to start when confirmed".to_string(),
+                title: "Choose whether to execute".to_string(),
                 lines: vec![
                     "provider binary checked".to_string(),
                     "local config path resolved".to_string(),
@@ -463,6 +460,75 @@ impl AppState {
         self.setup.model_index = model_index(&self.config.model);
         self.setup.reasoning_index = reasoning_index(&self.config.reasoning);
         self.setup.theme_index = theme_index(&self.config.theme);
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ExecutionPlan {
+    profile: String,
+    model: String,
+    reasoning: String,
+    changed_files: usize,
+    risk_zones: String,
+    context_percent: usize,
+    saved_percent: usize,
+}
+
+fn execution_plan(task: &str, state: &AppState) -> ExecutionPlan {
+    let fallback = || ExecutionPlan {
+        profile: "default".to_string(),
+        model: state.config.model.clone(),
+        reasoning: state.config.reasoning.clone(),
+        changed_files: state.repo_context.changed_files,
+        risk_zones: state.repo_context.risk_zones.clone(),
+        context_percent: state.metrics.context_percent,
+        saved_percent: state.metrics.saved_percent,
+    };
+
+    let Ok(policy) = routis_policy::PolicyFile::load(&state.config.policy_file) else {
+        return fallback();
+    };
+    let Ok(repo_context) =
+        routis_context::collect_repo_context(std::env::current_dir().unwrap_or_default())
+    else {
+        return fallback();
+    };
+    let Ok(mut decision) = routis_core::route_task_with_repo_context(
+        task,
+        routis_core::Profile::Default,
+        &repo_context.risk_zone_hints,
+        repo_context.changed_files.len(),
+    ) else {
+        return fallback();
+    };
+    decision.effective_profile = routis_policy::apply_policy_rules(
+        &policy,
+        decision.effective_profile,
+        &repo_context.risk_zone_hints,
+        &repo_context.changed_files,
+    );
+    let Some(execution) = policy.execution_config(decision.effective_profile) else {
+        return fallback();
+    };
+    let risk_zones = if repo_context.risk_zone_hints.is_empty() {
+        "-".to_string()
+    } else {
+        repo_context
+            .risk_zone_hints
+            .iter()
+            .map(|zone| zone.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+
+    ExecutionPlan {
+        profile: decision.effective_profile.as_str().to_string(),
+        model: execution.model.clone(),
+        reasoning: execution.reasoning.clone(),
+        changed_files: repo_context.changed_files.len(),
+        risk_zones,
+        context_percent: repo_context.changed_files.len().saturating_mul(6).min(100),
+        saved_percent: 32,
     }
 }
 
