@@ -1,3 +1,4 @@
+use crate::session_store::{default_session_store_path, SessionStore};
 use crate::tui::{
     command::{complete_slash_command, matching_commands, parse_slash_command, SlashCommand},
     config::{default_config_path, load_config, save_config},
@@ -11,6 +12,7 @@ use crate::tui::{
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{backend::CrosstermBackend, Terminal};
+use routis_context::collect_repo_context;
 use std::{io::Stdout, time::Duration};
 
 pub async fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
@@ -19,6 +21,7 @@ pub async fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Resul
         Some(config) => AppState::with_config(config),
         None => AppState::setup(),
     };
+    sync_repo_context(&mut state);
     let history_path = default_history_path();
     let mut history = ShellHistory::load(&history_path, 1000)?;
 
@@ -526,6 +529,10 @@ fn apply_command(
                     format!("model: {}", state.config.model),
                     format!("reasoning: {}", state.config.reasoning),
                     format!("theme: {}", state.config.theme),
+                    format!("policy file: {}", state.config.policy_file),
+                    format!("branch: {}", state.repo_context.branch),
+                    format!("changed files: {}", state.repo_context.changed_files),
+                    format!("risk zones: {}", state.repo_context.risk_zones),
                     format!("mode: {:?}", state.mode),
                 ],
             );
@@ -595,6 +602,57 @@ fn apply_command(
         Ok(SlashCommand::Clear) => {
             clear_view(state);
         }
+        Ok(SlashCommand::Context) => {
+            let lines = match collect_repo_context(std::env::current_dir().unwrap_or_default()) {
+                Ok(context) => {
+                    state.repo_context = repo_context_state_from_context(&context);
+                    let risk_zones = if context.risk_zone_hints.is_empty() {
+                        "-".to_string()
+                    } else {
+                        context
+                            .risk_zone_hints
+                            .iter()
+                            .map(|zone| zone.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    };
+                    let mut lines = vec![
+                        format!("branch: {}", context.branch.as_deref().unwrap_or("-")),
+                        format!("changed files: {}", context.changed_files.len()),
+                        format!("risk zones: {risk_zones}"),
+                    ];
+                    lines.extend(
+                        context
+                            .changed_files
+                            .iter()
+                            .take(5)
+                            .map(|path| format!("file: {}", path.display())),
+                    );
+                    lines
+                }
+                Err(error) => vec![format!("context unavailable: {error}")],
+            };
+            state.ui.status_line = "repository context loaded".to_string();
+            push_command_event(state, "Command result", lines);
+            record_result = false;
+        }
+        Ok(SlashCommand::PolicyFile) => {
+            let path = state
+                .ui
+                .input
+                .split_whitespace()
+                .nth(1)
+                .unwrap_or("configs/policies/default.yaml")
+                .to_string();
+            state.config.policy_file = path.clone();
+            state.ui.status_line = format!("policy file set: {path}");
+            push_command_event(
+                state,
+                "Command result",
+                vec![format!("policy file: {path}")],
+            );
+            record_result = false;
+        }
         Ok(SlashCommand::History) => {
             state.ui.status_line = "history: recent prompts are stored locally".to_string();
             push_command_event(state, "Command result", history_lines(history));
@@ -603,7 +661,8 @@ fn apply_command(
         Ok(SlashCommand::Sessions) => {
             state.ui.status_line = "sessions opened".to_string();
             push_status_event(state);
-            open_session_picker(state, history);
+            let store = SessionStore::new(default_session_store_path());
+            open_session_picker(state, history, &store);
             record_result = false;
         }
         Ok(SlashCommand::Quit) => {
@@ -625,6 +684,31 @@ fn apply_command(
     state.ui.history_cursor = None;
 }
 
+fn sync_repo_context(state: &mut AppState) {
+    if let Ok(context) = collect_repo_context(std::env::current_dir().unwrap_or_default()) {
+        state.repo_context = repo_context_state_from_context(&context);
+    }
+}
+
+fn repo_context_state_from_context(
+    context: &routis_context::RepoContext,
+) -> crate::tui::state::RepoContextState {
+    crate::tui::state::RepoContextState {
+        branch: context.branch.clone().unwrap_or_else(|| "-".to_string()),
+        changed_files: context.changed_files.len(),
+        risk_zones: if context.risk_zone_hints.is_empty() {
+            "-".to_string()
+        } else {
+            context
+                .risk_zone_hints
+                .iter()
+                .map(|zone| zone.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        },
+    }
+}
+
 fn close_palette(state: &mut AppState, status: &str) {
     state.ui.command_palette_open = false;
     state.ui.palette_mode = PaletteMode::Commands;
@@ -636,18 +720,21 @@ fn close_palette(state: &mut AppState, status: &str) {
     state.ui.status_line = status.to_string();
 }
 
-fn open_session_picker(state: &mut AppState, history: &ShellHistory) {
-    state.ui.session_picker_all_items = history
-        .recent_detailed(12)
-        .into_iter()
-        .map(|item| SessionPickerItem {
-            conversation: item.conversation,
-            title: item.title,
-            created: item.created,
-            updated: item.updated,
-            branch: item.branch,
-        })
-        .collect();
+fn open_session_picker(state: &mut AppState, history: &ShellHistory, store: &SessionStore) {
+    state.ui.session_picker_all_items = session_store_items(store).unwrap_or_default();
+    if state.ui.session_picker_all_items.is_empty() {
+        state.ui.session_picker_all_items = history
+            .recent_detailed(12)
+            .into_iter()
+            .map(|item| SessionPickerItem {
+                conversation: item.conversation,
+                title: item.title,
+                created: item.created,
+                updated: item.updated,
+                branch: item.branch,
+            })
+            .collect();
+    }
     state.ui.session_picker_query.clear();
     refresh_session_picker_filter(state);
     state.ui.command_palette_open = true;
@@ -655,6 +742,29 @@ fn open_session_picker(state: &mut AppState, history: &ShellHistory) {
     state.ui.command_palette_index = 0;
     state.ui.input.clear();
     state.ui.status_line = "sessions opened".to_string();
+}
+
+fn session_store_items(store: &SessionStore) -> Result<Vec<SessionPickerItem>> {
+    Ok(store
+        .list()?
+        .into_iter()
+        .take(12)
+        .map(|session| SessionPickerItem {
+            conversation: session.task,
+            title: session.title,
+            created: session.created_at.to_string(),
+            updated: session.updated_at.to_string(),
+            branch: session.branch,
+        })
+        .collect())
+}
+
+pub fn open_session_picker_for_test(
+    state: &mut AppState,
+    history: &ShellHistory,
+    store: &SessionStore,
+) {
+    open_session_picker(state, history, store);
 }
 
 fn refresh_session_picker_filter(state: &mut AppState) {

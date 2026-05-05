@@ -50,6 +50,7 @@ fn parse_config(raw: &str) -> ConfigState {
             "model" => config.model = value.to_string(),
             "reasoning" => config.reasoning = value.to_string(),
             "theme" => config.theme = value.to_string(),
+            "policy_file" => config.policy_file = value.to_string(),
             _ => {}
         }
     }
@@ -63,6 +64,7 @@ fn serialize_config(config: &ConfigState) -> String {
         format!("model={}", config.model),
         format!("reasoning={}", config.reasoning),
         format!("theme={}", config.theme),
+        format!("policy_file={}", config.policy_file),
     ]
     .join("\n")
 }

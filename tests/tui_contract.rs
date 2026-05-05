@@ -2,6 +2,7 @@ use assert_cmd::Command;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use predicates::prelude::*;
 use ratatui::{backend::TestBackend, style::Color, Terminal};
+use routis::session_store::{SessionRecord, SessionStore};
 use routis::tui::{
     app::{handle_key_for_test, handle_key_with_history_for_test, tick_for_test},
     command::{complete_slash_command, parse_slash_command, SlashCommand, COMMANDS},
@@ -56,7 +57,7 @@ fn setup_screen_uses_left_mascot_right_copy_and_no_outer_frame() {
     let state = AppState::setup();
     let text = render_to_text(120, 36, &state);
 
-    assert!(text.contains("Routis Setup v0.2.2"));
+    assert!(text.contains("Routis Setup v0.3.0"));
     assert!(text.contains("Welcome to Routis!"));
     assert!(text.contains("What this setup does"));
     assert!(text.contains("1  Start setup"));
@@ -205,11 +206,18 @@ fn slash_command_registry_matches_real_tui_surface() {
         parse_slash_command("/sessions").unwrap(),
         SlashCommand::Sessions
     );
+    assert_eq!(
+        parse_slash_command("/context").unwrap(),
+        SlashCommand::Context
+    );
+    assert_eq!(
+        parse_slash_command("/policy-file").unwrap(),
+        SlashCommand::PolicyFile
+    );
     assert_eq!(parse_slash_command("/quit").unwrap(), SlashCommand::Quit);
     assert!(parse_slash_command("/model").is_err());
     assert!(parse_slash_command("/effort").is_err());
     assert!(parse_slash_command("/login").is_err());
-    assert!(parse_slash_command("/context").is_err());
     assert!(parse_slash_command("/security").is_err());
 }
 
@@ -219,10 +227,10 @@ fn slash_palette_is_filterable_and_rich_enough() {
     assert!(all.len() >= 9);
     assert!(all.contains(&"/setup"));
     assert!(all.contains(&"/doctor"));
+    assert!(all.contains(&"/context"));
     assert!(all.contains(&"/sessions"));
     assert!(!all.contains(&"/model"));
     assert!(!all.contains(&"/effort"));
-    assert!(!all.contains(&"/context"));
     assert!(!all.contains(&"/login"));
     assert!(!all.contains(&"/security"));
     assert_eq!(complete_slash_command("/th"), vec!["/theme"]);
@@ -293,18 +301,59 @@ fn command_selected_from_palette_is_saved_to_history() {
 }
 
 #[test]
+fn context_command_records_repo_context_block() {
+    let mut state = AppState::home();
+    state.ui.input = "/context".to_string();
+
+    handle_key_for_test(
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+
+    let event = state
+        .session
+        .events
+        .iter()
+        .find(|event| event.title == "Command result")
+        .expect("/context should render a command result");
+
+    assert!(event.lines.iter().any(|line| line.starts_with("branch:")));
+    assert!(event
+        .lines
+        .iter()
+        .any(|line| line.starts_with("changed files:")));
+    assert!(event
+        .lines
+        .iter()
+        .any(|line| line.starts_with("risk zones:")));
+}
+
+#[test]
+fn policy_file_command_updates_tui_config() {
+    let mut state = AppState::home();
+    state.ui.input = "/policy-file configs/policies/default.yaml".to_string();
+
+    handle_key_for_test(
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+
+    assert_eq!(state.config.policy_file, "configs/policies/default.yaml");
+    assert!(state.session.events.iter().any(|event| event
+        .lines
+        .iter()
+        .any(|line| line.contains("policy file: configs/policies/default.yaml"))));
+}
+
+#[test]
 fn sessions_command_opens_selectable_session_picker() {
     let mut state = AppState::home();
     let mut history = ShellHistory::new(10);
     history.push("first task");
     history.push("second task");
-    state.ui.input = "/sessions".to_string();
-
-    handle_key_with_history_for_test(
-        &mut state,
-        &mut history,
-        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
-    );
+    let dir = tempfile::TempDir::new().unwrap();
+    let store = SessionStore::new(dir.path().join("sessions"));
+    routis::tui::app::open_session_picker_for_test(&mut state, &history, &store);
 
     let text = render_to_text(150, 44, &state);
     assert!(state.ui.command_palette_open);
@@ -326,18 +375,43 @@ fn sessions_command_opens_selectable_session_picker() {
 }
 
 #[test]
+fn sessions_picker_prefers_session_store_records() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let store = SessionStore::new(dir.path().join("sessions"));
+    store
+        .save(&SessionRecord::new(
+            "debug auth flow",
+            "feature/auth",
+            "default",
+            "deep",
+            "gpt-5.5",
+            "high",
+        ))
+        .unwrap();
+    let mut state = AppState::home();
+    let history = ShellHistory::new(10);
+
+    routis::tui::app::open_session_picker_for_test(&mut state, &history, &store);
+
+    assert!(state.ui.command_palette_open);
+    assert_eq!(state.ui.session_picker_items.len(), 1);
+    assert_eq!(state.ui.session_picker_items[0].title, "debug-auth-flow");
+    assert_eq!(state.ui.session_picker_items[0].branch, "feature/auth");
+    assert_eq!(
+        state.ui.session_picker_items[0].conversation,
+        "debug auth flow"
+    );
+}
+
+#[test]
 fn sessions_picker_switches_selection_with_arrow_keys() {
     let mut state = AppState::home();
     let mut history = ShellHistory::new(10);
     history.push("first task");
     history.push("second task");
-    state.ui.input = "/sessions".to_string();
-
-    handle_key_with_history_for_test(
-        &mut state,
-        &mut history,
-        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
-    );
+    let dir = tempfile::TempDir::new().unwrap();
+    let store = SessionStore::new(dir.path().join("sessions"));
+    routis::tui::app::open_session_picker_for_test(&mut state, &history, &store);
     handle_key_with_history_for_test(
         &mut state,
         &mut history,
@@ -513,7 +587,7 @@ fn home_header_has_greeting_metrics_and_dotted_internal_dividers() {
     let state = AppState::home();
     let text = render_to_text(150, 44, &state);
 
-    assert!(text.contains("Routis v0.2.2"));
+    assert!(text.contains("Routis v0.3.0"));
     assert!(text.contains("Welcome,"));
     assert!(text.contains("Workspace:"));
     assert!(text.contains("~/"));
@@ -705,6 +779,32 @@ fn status_doctor_config_and_history_render_useful_command_blocks() {
     let text = render_to_text(150, 44, &state);
     assert!(text.contains("debug auth flow"));
     assert!(text.contains("update docs"));
+}
+
+#[test]
+fn status_command_includes_repo_context_state() {
+    let mut state = AppState::home();
+    state.repo_context.branch = "feature/context".to_string();
+    state.repo_context.changed_files = 3;
+    state.repo_context.risk_zones = "auth, workflow".to_string();
+    state.ui.input = "/status".to_string();
+
+    handle_key_for_test(
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+
+    let event = state
+        .session
+        .events
+        .iter()
+        .find(|event| event.title == "Command result")
+        .unwrap();
+    assert!(event.lines.contains(&"branch: feature/context".to_string()));
+    assert!(event.lines.contains(&"changed files: 3".to_string()));
+    assert!(event
+        .lines
+        .contains(&"risk zones: auth, workflow".to_string()));
 }
 
 #[test]
@@ -1040,7 +1140,7 @@ fn shell_layout_survives_required_terminal_sizes() {
     ] {
         let text = render_to_text(width, height, &AppState::home());
 
-        assert!(text.contains("Routis v0.2.2"));
+        assert!(text.contains("Routis v0.3.0"));
         assert!(text.contains("Type a task or / for commands"));
         assert!(text.contains("Metrics"));
         assert!(
@@ -1059,7 +1159,7 @@ fn shell_layout_survives_required_terminal_sizes() {
 fn shell_too_small_fallback_is_plain_and_safe() {
     let text = render_to_text(79, 23, &AppState::home());
 
-    assert!(text.contains("Routis v0.2.2"));
+    assert!(text.contains("Routis v0.3.0"));
     assert!(text.contains("Terminal too small."));
     assert!(text.contains("80x24"));
 }

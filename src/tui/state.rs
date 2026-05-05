@@ -64,6 +64,7 @@ pub struct ConfigState {
     pub model: String,
     pub reasoning: String,
     pub theme: String,
+    pub policy_file: String,
 }
 
 impl Default for ConfigState {
@@ -74,6 +75,7 @@ impl Default for ConfigState {
             model: "gpt-5.5".to_string(),
             reasoning: "medium".to_string(),
             theme: "Routis Cyan".to_string(),
+            policy_file: "configs/policies/default.yaml".to_string(),
         }
     }
 }
@@ -84,6 +86,23 @@ pub struct ProviderDiagnostics {
     pub version: String,
     pub auth_status: String,
     pub config_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepoContextState {
+    pub branch: String,
+    pub changed_files: usize,
+    pub risk_zones: String,
+}
+
+impl Default for RepoContextState {
+    fn default() -> Self {
+        Self {
+            branch: "-".to_string(),
+            changed_files: 0,
+            risk_zones: "-".to_string(),
+        }
+    }
 }
 
 impl Default for ProviderDiagnostics {
@@ -252,6 +271,7 @@ pub struct AppState {
     pub setup: SetupState,
     pub config: ConfigState,
     pub provider_diagnostics: ProviderDiagnostics,
+    pub repo_context: RepoContextState,
     pub session: SessionState,
     pub metrics: MetricsState,
     pub ui: UiState,
@@ -265,6 +285,7 @@ impl AppState {
             setup: SetupState::default(),
             config: ConfigState::default(),
             provider_diagnostics: detect_provider_diagnostics(),
+            repo_context: RepoContextState::default(),
             session: SessionState::default(),
             metrics: MetricsState::default(),
             ui: UiState::default(),

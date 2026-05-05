@@ -140,6 +140,8 @@ Useful TUI commands:
 | `/theme` | Open the theme picker with live preview |
 | `/sessions` | Open searchable recent-session selection |
 | `/history` | Show local history status |
+| `/context` | Show branch, changed files, and risk zones |
+| `/policy-file <path>` | Set the routing policy file for this shell |
 | `/clear` | Clear the current TUI timeline |
 | `/config` | Show the local config path |
 | `/quit` | Exit Routis |
@@ -174,6 +176,19 @@ Use a policy file:
 routis --policy-file ./configs/policies/default.yaml "update config loader"
 ```
 
+Show repository context:
+
+```bash
+routis context
+```
+
+List saved routing sessions:
+
+```bash
+routis session list
+routis session resume debug-auth-flow
+```
+
 Execute the generated Codex command:
 
 ```bash
@@ -182,18 +197,21 @@ routis --execute "implement config loader"
 
 Without `--execute`, Routis stays in dry-run mode.
 
-Launch the v0.2.2 TUI:
+Launch the v0.3.0 TUI:
 
 ```bash
 routis
 ```
 
-The TUI stores local config under `~/.routis/config.toml` and recent prompt history under `~/.routis/shell_history`. Provider diagnostics locate `codex` from the system PATH and run `codex --version`; on Windows, Routis prefers executable shims such as `.cmd` or `.exe` over blocked PowerShell scripts.
+The TUI stores local config under `~/.routis/config.toml`, recent prompt history under `~/.routis/shell_history`, and route sessions under `~/.routis/sessions`. Provider diagnostics locate `codex` from the system PATH and run `codex --version`; on Windows, Routis prefers executable shims such as `.cmd` or `.exe` over blocked PowerShell scripts.
 
 ## CLI Reference
 
 ```text
 routis [OPTIONS] [TASK]...
+routis context
+routis session list
+routis session resume <ID|TITLE>
 
 Arguments:
   [TASK]...  Positional task text
@@ -244,7 +262,21 @@ profiles:
   extradeep:
     model: gpt-5.5
     reasoning: xhigh
+
+rules:
+  - if_risk_zone: auth
+    min_profile: deep
+  - if_risk_zone: schema
+    min_profile: deep
+  - if_risk_zone: workflow
+    min_profile: deep
+  - if_risk_zone: package
+    min_profile: deep
+  - if_path: README.md
+    max_profile: cheap
 ```
+
+Policy rules apply only in automatic `default` routing. An explicit `--policy cheap`, `--policy balanced`, `--policy deep`, or `--policy extradeep` remains authoritative.
 
 ## Development
 

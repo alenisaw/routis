@@ -23,6 +23,35 @@ pub enum Profile {
     Default,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum RiskZone {
+    Config,
+    Auth,
+    Schema,
+    Workflow,
+    Package,
+    Tests,
+    Docs,
+    Ui,
+}
+
+impl RiskZone {
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Config => "config",
+            Self::Auth => "auth",
+            Self::Schema => "schema",
+            Self::Workflow => "workflow",
+            Self::Package => "package",
+            Self::Tests => "tests",
+            Self::Docs => "docs",
+            Self::Ui => "ui",
+        }
+    }
+}
+
 impl Profile {
     #[must_use]
     pub fn as_str(self) -> &'static str {
@@ -89,6 +118,40 @@ pub fn route_task(task: &str, requested_profile: Profile) -> Result<RoutingDecis
         signals_matched: classification.signals_matched,
         explain,
     })
+}
+
+pub fn route_task_with_repo_context(
+    task: &str,
+    requested_profile: Profile,
+    risk_zones: &[RiskZone],
+    changed_file_count: usize,
+) -> Result<RoutingDecision, RoutingError> {
+    let mut decision = route_task(task, requested_profile)?;
+    if requested_profile != Profile::Default {
+        return Ok(decision);
+    }
+
+    let repo_profile = repo_context_min_profile(risk_zones, changed_file_count);
+    if let Some(profile) = repo_profile {
+        decision.effective_profile = max_profile(decision.effective_profile, profile);
+        for zone in risk_zones {
+            decision
+                .signals_matched
+                .push(format!("risk-zone:{}", zone.as_str()));
+        }
+        if changed_file_count >= 6 {
+            decision
+                .signals_matched
+                .push(format!("changed-files:{changed_file_count}"));
+        }
+        decision.explain = explain_decision(
+            requested_profile,
+            decision.effective_profile,
+            &decision.signals_matched,
+        );
+    }
+
+    Ok(decision)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -237,6 +300,42 @@ fn explain_decision(requested: Profile, effective: Profile, signals: &[String]) 
     }
 }
 
+fn repo_context_min_profile(risk_zones: &[RiskZone], changed_file_count: usize) -> Option<Profile> {
+    let high_risk = risk_zones.iter().any(|zone| {
+        matches!(
+            zone,
+            RiskZone::Auth | RiskZone::Schema | RiskZone::Workflow | RiskZone::Package
+        )
+    });
+    if high_risk {
+        return Some(Profile::Deep);
+    }
+    if changed_file_count >= 12 {
+        return Some(Profile::ExtraDeep);
+    }
+    if changed_file_count >= 6 {
+        return Some(Profile::Deep);
+    }
+    None
+}
+
+fn max_profile(left: Profile, right: Profile) -> Profile {
+    if profile_rank(left) >= profile_rank(right) {
+        left
+    } else {
+        right
+    }
+}
+
+fn profile_rank(profile: Profile) -> u8 {
+    match profile {
+        Profile::Cheap => 0,
+        Profile::Balanced | Profile::Default => 1,
+        Profile::Deep => 2,
+        Profile::ExtraDeep => 3,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,6 +379,27 @@ mod tests {
     #[test]
     fn explicit_policy_overrides_classifier() {
         let decision = route_task("redesign the architecture", Profile::Cheap).unwrap();
+        assert_eq!(decision.effective_profile, Profile::Cheap);
+    }
+
+    #[test]
+    fn repo_risk_zone_elevates_default_routing_profile() {
+        let decision =
+            route_task_with_repo_context("small fix", Profile::Default, &[RiskZone::Auth], 1)
+                .unwrap();
+
+        assert_eq!(decision.effective_profile, Profile::Deep);
+        assert!(decision
+            .signals_matched
+            .contains(&"risk-zone:auth".to_string()));
+    }
+
+    #[test]
+    fn explicit_policy_is_not_elevated_by_repo_context() {
+        let decision =
+            route_task_with_repo_context("small fix", Profile::Cheap, &[RiskZone::Auth], 1)
+                .unwrap();
+
         assert_eq!(decision.effective_profile, Profile::Cheap);
     }
 

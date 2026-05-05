@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.3.0 - Repo Context and Session Store - 2026-05-05
+
+This release makes Routis aware of repository state before routing tasks.
+
+### Added
+
+- Added repository context collection for branch, changed files, file extensions, and risk zones.
+- Added risk zone detection for config, auth, schema, workflow, package, tests, docs, and TUI/UI paths.
+- Added repo-aware automatic routing so high-risk repository changes can raise the selected profile.
+- Added `routis context` for inspecting repository context directly.
+- Added `/context` and `/policy-file <path>` to the TUI shell.
+- Added policy `rules` with `if_risk_zone`, `if_path`, `min_profile`, and `max_profile`.
+- Added local route session storage under `~/.routis/sessions`.
+- Added `routis session list` and `routis session resume <id|title>`.
+
+### Changed
+
+- Updated the default policy file with high-risk minimum profile rules and a README cap rule.
+- Extended CLI `--explain` output with branch, changed file count, and risk zones.
+- Extended `/status` with policy file and repository context details.
+- Updated `/sessions` to prefer saved route sessions while keeping prompt history as a fallback.
+
+### Quality
+
+- Added coverage for repo context collection, repo-aware routing, policy rules, context commands, session store, and session resume.
+
 ## 0.2.2 - TUI Command and Layout Polish - 2026-05-05
 
 This patch release stabilizes the interactive TUI before v0.3.0 work begins.
@@ -10,12 +36,6 @@ This patch release stabilizes the interactive TUI before v0.3.0 work begins.
 - Fixed command history persistence so submitted commands and palette-selected commands are saved immediately.
 - Fixed provider picker confirmation so selecting Codex CLI runs the check, accepts the provider, and closes the picker when the provider is found.
 - Fixed session picker keyboard selection coverage and command-result accumulation across consecutive slash commands.
-
-### Changed
-
-- Updated TUI version labels to use the package version automatically.
-- Reduced dashboard header density and removed the `more CHANGELOG` prompt from the home view.
-- Restored the home dashboard `Recent Sessions` section while keeping the TUI ready for v0.3.0 repo-aware routing work.
 
 ### Quality
 
