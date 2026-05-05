@@ -140,15 +140,14 @@ fn render_profile(frame: &mut Frame, area: Rect, state: &AppState, palette: Them
 
 fn render_updates_commands(frame: &mut Frame, area: Rect, palette: ThemePalette) {
     let mut lines = vec![
-        Line::styled("Updates", palette.section_title()),
-        bullet(release_updates()[0], area.width, palette),
-        bullet(release_updates()[1], area.width, palette),
-        bullet(release_updates()[2], area.width, palette),
+        Line::styled("Releases", palette.section_title()),
+        bullet(release_notes()[0], area.width, palette),
+        bullet(release_notes()[1], area.width, palette),
         section_rule(area.width, palette),
         Line::styled("Recent Sessions", palette.section_title()),
     ];
 
-    let recent = recent_sessions(3);
+    let recent = recent_sessions(2);
     if recent.is_empty() {
         lines.push(Line::styled("no local sessions yet", palette.muted()));
     } else {
@@ -349,10 +348,9 @@ fn inset_x(area: Rect, left: u16, right: u16) -> Rect {
     }
 }
 
-fn release_updates() -> [&'static str; 3] {
+fn release_notes() -> [&'static str; 2] {
     [
-        "Stabilized slash command output and history persistence.",
-        "Prepared TUI fixes for v0.3.0 repo-aware routing.",
-        "Kept local setup, provider checks, and session flow.",
+        "v0.3.0 Repo context and session store.",
+        "v0.2.2 TUI command and layout polish.",
     ]
 }
