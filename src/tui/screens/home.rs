@@ -315,7 +315,7 @@ fn provider_label(value: &str) -> &str {
 }
 
 fn section_rule(width: u16, palette: ThemePalette) -> Line<'static> {
-    let line = ". ".repeat((width as usize).saturating_add(1) / 2);
+    let line = "─".repeat(width as usize);
     Line::styled(line, palette.border())
 }
 

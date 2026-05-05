@@ -596,6 +596,7 @@ fn home_header_has_greeting_metrics_and_dotted_internal_dividers() {
     assert!(text.contains("v0.2.2 TUI command and layout polish"));
     assert!(text.find("Releases").unwrap() < text.find("Recent Sessions").unwrap());
     assert!(!text.contains("Updates"));
+    assert!(text.contains("────────────────"));
     assert!(text.contains("Metrics"));
     assert!(text.contains("context"));
     assert!(text.contains("input"));
