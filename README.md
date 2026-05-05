@@ -182,7 +182,7 @@ routis --execute "implement config loader"
 
 Without `--execute`, Routis stays in dry-run mode.
 
-Launch the v0.2.0 TUI:
+Launch the v0.2.2 TUI:
 
 ```bash
 routis

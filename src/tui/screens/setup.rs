@@ -4,6 +4,7 @@ use crate::tui::{
     state::{AppState, SetupStep, THEME_MAX},
     theme::ThemePalette,
     widgets::{dividers::h_rule, mascot::mascot_render_lines},
+    APP_VERSION,
 };
 use ratatui::{
     layout::{Alignment, Constraint, Layout, Rect},
@@ -35,7 +36,7 @@ pub fn render_setup(frame: &mut Frame, area: Rect, state: &AppState, palette: Th
     // ── Title ─────────────────────────────────────────────────────────────
     frame.render_widget(
         Paragraph::new(Line::from(vec![Span::styled(
-            "Routis Setup v0.2.0",
+            format!("Routis Setup v{APP_VERSION}"),
             palette.accent().bold(),
         )]))
         .alignment(Alignment::Left),
@@ -90,7 +91,7 @@ fn render_step_indicator(frame: &mut Frame, area: Rect, state: &AppState, palett
 
     // Second line: version info
     let info_line = Line::from(vec![
-        Span::styled("v0.2.0  ", palette.dim()),
+        Span::styled(format!("v{APP_VERSION}  "), palette.dim()),
         Span::styled(
             format!("step {} of {}", current + 1, steps.len()),
             palette.muted(),
@@ -314,12 +315,14 @@ fn render_setup_choices(frame: &mut Frame, area: Rect, state: &AppState, palette
                 kv_line("auth", &state.provider_diagnostics.auth_status, palette),
                 Line::raw(""),
                 Line::styled(
-                    if state.provider_diagnostics.command == "Found" {
-                        "✓  Binary found."
+                    if state.setup.provider_checked && state.provider_diagnostics.command == "Found"
+                    {
+                        "✓  Codex CLI Found"
                     } else {
-                        "✗  Install Codex CLI, then run check again."
+                        "✗  ERR Install Codex CLI, then run check again."
                     },
-                    if state.provider_diagnostics.command == "Found" {
+                    if state.setup.provider_checked && state.provider_diagnostics.command == "Found"
+                    {
                         palette.success()
                     } else {
                         palette.warning()

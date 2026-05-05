@@ -7,6 +7,7 @@ use crate::tui::{
         palette::{command_palette_height, render_command_palette},
         timeline::render_timeline,
     },
+    APP_VERSION,
 };
 use ratatui::{
     layout::{Alignment, Constraint, Layout, Margin, Rect},
@@ -79,7 +80,10 @@ fn render_header_block(frame: &mut Frame, area: Rect, state: &AppState, palette:
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(palette.border_active())
-        .title(Span::styled(" Routis v0.2.0 ", palette.section_title()))
+        .title(Span::styled(
+            format!(" Routis v{APP_VERSION} "),
+            palette.section_title(),
+        ))
         .title_alignment(Alignment::Center);
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -140,7 +144,7 @@ fn safe_rect(area: Rect, bounds: Rect) -> Rect {
 
 fn render_too_small(frame: &mut Frame, area: Rect, palette: ThemePalette) {
     let lines = vec![
-        Line::styled("Routis v0.2.0", palette.section_title()),
+        Line::styled(format!("Routis v{APP_VERSION}"), palette.section_title()),
         Line::styled("Terminal too small.", palette.text()),
         Line::styled("Resize to at least 80x24.", palette.muted()),
     ];

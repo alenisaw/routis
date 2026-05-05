@@ -12,7 +12,7 @@ use ratatui::{
 
 pub fn command_palette_height(state: &AppState, max_height: u16) -> u16 {
     let rows = match state.ui.palette_mode {
-        PaletteMode::Commands => matching_commands(&state.ui.input).len() as u16,
+        PaletteMode::Commands => matching_commands(&state.ui.input).len().min(5) as u16,
         PaletteMode::Sessions => state.ui.session_picker_items.len() as u16 + 3,
         PaletteMode::Themes => THEME_MAX as u16 + 5,
         PaletteMode::Providers => 7,
@@ -46,7 +46,7 @@ fn render_commands(frame: &mut Frame, area: Rect, state: &AppState, palette: The
         ..area
     };
     frame.render_widget(Clear, area);
-    let visible = area.height.saturating_sub(2) as usize;
+    let visible = area.height.saturating_sub(2).min(5) as usize;
     let selected = state
         .ui
         .command_palette_index

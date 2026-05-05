@@ -26,17 +26,9 @@ pub fn render_header(frame: &mut Frame, area: Rect, state: &AppState, palette: T
 
     let content = area.inner(Margin {
         horizontal: 1,
-        vertical: if area.height >= 16 {
-            2
-        } else if area.height >= 14 {
-            1
-        } else {
-            0
-        },
+        vertical: if area.height >= 16 { 1 } else { 0 },
     });
 
-    // `area` is inside the shell border and margins. Add back the chrome width
-    // so the public breakpoints still map to real terminal columns.
     match LayoutMode::for_width(area.width.saturating_add(6)) {
         LayoutMode::Wide => render_wide(frame, content, state, palette),
         LayoutMode::Compact | LayoutMode::Stacked => render_medium(frame, content, state, palette),
@@ -48,7 +40,7 @@ fn render_wide(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePa
     let cols = Layout::horizontal([
         Constraint::Length(LEFT_WIDE),
         Constraint::Length(1),
-        Constraint::Min(46),
+        Constraint::Min(50),
         Constraint::Length(1),
         Constraint::Length(RIGHT_WIDE),
     ])
@@ -56,7 +48,7 @@ fn render_wide(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePa
 
     render_profile(frame, inset_right(cols[0], 2), state, palette);
     render_separator(frame, cols[1], palette);
-    render_updates_recent(frame, inset_x(cols[2], 2, 2), state, palette);
+    render_updates_commands(frame, inset_x(cols[2], 2, 2), palette);
     render_separator(frame, cols[3], palette);
     render_model_metrics(frame, inset_left(cols[4], 2), state, palette);
 }
@@ -70,7 +62,7 @@ fn render_medium(frame: &mut Frame, area: Rect, state: &AppState, palette: Theme
     let cols = Layout::horizontal([
         Constraint::Length(30),
         Constraint::Length(1),
-        Constraint::Min(28),
+        Constraint::Min(32),
         Constraint::Length(1),
         Constraint::Length(30),
     ])
@@ -78,21 +70,21 @@ fn render_medium(frame: &mut Frame, area: Rect, state: &AppState, palette: Theme
 
     render_profile(frame, inset_right(cols[0], 1), state, palette);
     render_separator(frame, cols[1], palette);
-    render_updates_recent(frame, inset_x(cols[2], 2, 1), state, palette);
+    render_updates_commands(frame, inset_x(cols[2], 2, 1), palette);
     render_separator(frame, cols[3], palette);
     render_model_metrics(frame, inset_left(cols[4], 2), state, palette);
 }
 
 fn render_small(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
     let rows = Layout::vertical([
-        Constraint::Length(9),
-        Constraint::Length(1),
+        Constraint::Length(8),
+        Constraint::Length(7),
         Constraint::Min(1),
     ])
     .split(area);
 
     render_profile(frame, rows[0], state, palette);
-    render_updates_recent(frame, rows[1], state, palette);
+    render_updates_commands(frame, rows[1], palette);
     render_model_metrics(frame, rows[2], state, palette);
 }
 
@@ -105,12 +97,24 @@ fn render_separator(frame: &mut Frame, area: Rect, palette: ThemePalette) {
 
 fn render_profile(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
     let display_name = truncate(&state.config.display_name, 22);
+    if area.height < 10 {
+        let lines = vec![
+            Line::styled(
+                center_display(&format!("Welcome, {display_name}!"), area.width),
+                palette.section_title(),
+            ),
+            centered_workspace_line(area.width, palette),
+        ];
+        frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), area);
+        return;
+    }
+
     let mut lines = Vec::new();
     let content_height = mascot_lines().len() + 3;
     let top_pad = (area.height as usize)
         .saturating_sub(content_height)
         .saturating_div(2)
-        .min(3);
+        .min(2);
     for _ in 0..top_pad {
         lines.push(Line::raw(""));
     }
@@ -134,13 +138,12 @@ fn render_profile(frame: &mut Frame, area: Rect, state: &AppState, palette: Them
     frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), area);
 }
 
-fn render_updates_recent(frame: &mut Frame, area: Rect, _state: &AppState, palette: ThemePalette) {
+fn render_updates_commands(frame: &mut Frame, area: Rect, palette: ThemePalette) {
     let mut lines = vec![
         Line::styled("Updates", palette.section_title()),
         bullet(release_updates()[0], area.width, palette),
         bullet(release_updates()[1], area.width, palette),
         bullet(release_updates()[2], area.width, palette),
-        Line::raw(""),
         section_rule(area.width, palette),
         Line::styled("Recent Sessions", palette.section_title()),
     ];
@@ -152,12 +155,6 @@ fn render_updates_recent(frame: &mut Frame, area: Rect, _state: &AppState, palet
         for (index, (task, when)) in recent.into_iter().enumerate() {
             lines.push(recent_line(&task, &when, area.width, index == 0, palette));
         }
-        lines.push(Line::raw(""));
-        lines.push(Line::from(vec![
-            Span::styled("open", palette.muted()),
-            Span::raw("  "),
-            Span::styled("/sessions", palette.accent()),
-        ]));
     }
 
     frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), area);
@@ -186,7 +183,7 @@ fn render_model_metrics(frame: &mut Frame, area: Rect, state: &AppState, palette
             area.width,
             palette,
         ),
-        kv_line_width("models", &state.config.model, area.width, palette),
+        kv_line_width("model", &state.config.model, area.width, palette),
         kv_line_width("reason", &state.config.reasoning, area.width, palette),
         section_rule(area.width, palette),
     ];
@@ -202,7 +199,7 @@ fn render_model_metrics(frame: &mut Frame, area: Rect, state: &AppState, palette
 
 fn bullet(text: &'static str, width: u16, palette: ThemePalette) -> Line<'static> {
     Line::from(vec![
-        Span::styled("● ", palette.accent()),
+        Span::styled("* ", palette.accent()),
         Span::styled(
             truncate(text, (width as usize).saturating_sub(2)),
             palette.text(),
@@ -237,7 +234,7 @@ fn recent_line(
     selected: bool,
     palette: ThemePalette,
 ) -> Line<'static> {
-    let marker = if selected { "› " } else { "  " };
+    let marker = if selected { "> " } else { "  " };
     let when_width = UnicodeWidthStr::width(when);
     let available = width as usize;
     let task_width = available.saturating_sub(2 + when_width + 2).max(8);
@@ -268,7 +265,7 @@ fn recent_line(
 }
 
 pub fn sep_line(palette: ThemePalette) -> Line<'static> {
-    Line::styled("· · · · · · · · · · · ·", palette.dim())
+    Line::styled(". . . . . . . . . . . .", palette.dim())
 }
 
 pub fn workspace_label() -> String {
@@ -302,7 +299,7 @@ fn truncate(value: &str, max: usize) -> String {
         out.push(ch);
         width += ch_width;
     }
-    out.push('…');
+    out.push_str("...");
     out
 }
 
@@ -319,7 +316,7 @@ fn provider_label(value: &str) -> &str {
 }
 
 fn section_rule(width: u16, palette: ThemePalette) -> Line<'static> {
-    let line = "· ".repeat((width as usize).saturating_add(1) / 2);
+    let line = ". ".repeat((width as usize).saturating_add(1) / 2);
     Line::styled(line, palette.border())
 }
 
@@ -353,16 +350,9 @@ fn inset_x(area: Rect, left: u16, right: u16) -> Rect {
 }
 
 fn release_updates() -> [&'static str; 3] {
-    const CHANGELOG: &str = include_str!("../../../CHANGELOG.md");
-    let mut items = CHANGELOG
-        .lines()
-        .skip_while(|line| !line.trim().eq("### Highlights"))
-        .skip(1)
-        .filter_map(|line| line.trim().strip_prefix("- "))
-        .take(3);
     [
-        items.next().unwrap_or("terminal shell refinements"),
-        items.next().unwrap_or("local setup flow"),
-        items.next().unwrap_or("session picker improvements"),
+        "Stabilized slash command output and history persistence.",
+        "Prepared TUI fixes for v0.3.0 repo-aware routing.",
+        "Kept local setup, provider checks, and session flow.",
     ]
 }

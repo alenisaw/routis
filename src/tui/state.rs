@@ -354,6 +354,7 @@ impl AppState {
                 source: "Routis".to_string(),
                 title: "Preparing local execution plan".to_string(),
                 lines: vec![
+                    format!("Task: {task}"),
                     format!("Provider: {}", self.config.provider),
                     format!(
                         "Model: {}  reasoning: {}",
@@ -376,6 +377,7 @@ impl AppState {
             },
         ]);
         self.session.events = events;
+        self.session.visible_lines = self.session_total_render_lines();
         self.ui.input.clear();
         self.ui.command_palette_open = false;
         self.ui.shortcuts_open = false;
@@ -414,7 +416,12 @@ impl AppState {
 
     #[must_use]
     pub fn session_total_render_lines(&self) -> usize {
-        self.session.events.iter().map(|e| 1 + e.lines.len()).sum()
+        self.session
+            .events
+            .iter()
+            .map(|event| 1 + event.lines.len())
+            .sum::<usize>()
+            .saturating_add(self.session.events.len().saturating_sub(1))
     }
 
     fn start_session_from_input(&mut self) {

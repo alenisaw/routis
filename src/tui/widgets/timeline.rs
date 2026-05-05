@@ -15,7 +15,12 @@ pub fn render_timeline(frame: &mut Frame, area: Rect, state: &AppState, palette:
         return;
     }
 
-    let title_text = format!(" {} ", &state.session.title);
+    let title = if state.session.current_task.is_empty() {
+        state.session.title.as_str()
+    } else {
+        "active-session"
+    };
+    let title_text = format!(" {title} ");
     let (badge_text, badge_style) = phase_badge(state.session.phase, palette);
     let inner_width = area.width as usize;
     let title_len = title_text.chars().count();
@@ -91,7 +96,11 @@ pub fn render_timeline(frame: &mut Frame, area: Rect, state: &AppState, palette:
     }
 
     let max_scroll = lines.len().saturating_sub(area.height as usize);
-    let scroll = state.session.scroll.min(max_scroll) as u16;
+    let scroll = if state.session.follow {
+        max_scroll
+    } else {
+        state.session.scroll.min(max_scroll)
+    } as u16;
 
     frame.render_widget(
         Paragraph::new(lines)

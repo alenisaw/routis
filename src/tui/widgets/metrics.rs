@@ -87,7 +87,6 @@ fn metric_line(
     gauge_width: Option<usize>,
 ) -> Line<'static> {
     let value_str = format!("{value}{suffix}");
-
     let fill_style = if value * 100 / max.max(1) >= 90 {
         palette.error()
     } else if value * 100 / max.max(1) >= 70 && label == "context" {
@@ -99,10 +98,10 @@ fn metric_line(
     let mut spans = vec![Span::styled(format!("{label:<8}"), palette.muted())];
     if let Some(width) = gauge_width {
         let (filled, empty) = bar_parts(value, max, width);
-        spans.push(Span::raw(" "));
+        spans.push(Span::raw(" ["));
         spans.push(Span::styled(filled, fill_style));
         spans.push(Span::styled(empty, palette.gauge_empty()));
-        spans.push(Span::raw(" "));
+        spans.push(Span::raw("] "));
     } else {
         spans.push(Span::raw("  "));
     }
@@ -110,13 +109,13 @@ fn metric_line(
     Line::from(spans)
 }
 
-/// Filled block bar: `████████░░` — 8 thick + thin chars.
 fn bar_parts(value: usize, max: usize, width: usize) -> (String, String) {
     let filled = (value.min(max) * width)
         .checked_div(max.max(1))
         .unwrap_or(0)
         .min(width);
-    ("█".repeat(filled), "░".repeat(width - filled))
+    let empty = width.saturating_sub(filled);
+    ("#".repeat(filled), "-".repeat(empty))
 }
 
 #[must_use]

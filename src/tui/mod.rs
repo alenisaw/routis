@@ -8,3 +8,5 @@ pub mod session;
 pub mod state;
 pub mod theme;
 mod widgets;
+
+pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");

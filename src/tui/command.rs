@@ -23,22 +23,10 @@ pub struct CommandSpec {
 
 pub const COMMANDS: [CommandSpec; 11] = [
     CommandSpec {
-        name: "/help",
-        description: "show commands and shortcuts",
-        shortcut: "?",
-        command: SlashCommand::Help,
-    },
-    CommandSpec {
         name: "/status",
-        description: "show provider, model, theme, and current state",
+        description: "show current provider and shell state",
         shortcut: "",
         command: SlashCommand::Status,
-    },
-    CommandSpec {
-        name: "/setup",
-        description: "open local setup wizard",
-        shortcut: "",
-        command: SlashCommand::Setup,
     },
     CommandSpec {
         name: "/doctor",
@@ -53,18 +41,6 @@ pub const COMMANDS: [CommandSpec; 11] = [
         command: SlashCommand::Config,
     },
     CommandSpec {
-        name: "/provider",
-        description: "choose provider and run diagnostics",
-        shortcut: "",
-        command: SlashCommand::Provider,
-    },
-    CommandSpec {
-        name: "/theme",
-        description: "choose theme with live preview",
-        shortcut: "",
-        command: SlashCommand::Theme,
-    },
-    CommandSpec {
         name: "/clear",
         description: "clear current session view",
         shortcut: "Ctrl+L",
@@ -73,7 +49,7 @@ pub const COMMANDS: [CommandSpec; 11] = [
     CommandSpec {
         name: "/history",
         description: "show recent prompts from local history",
-        shortcut: "↑",
+        shortcut: "Up",
         command: SlashCommand::History,
     },
     CommandSpec {
@@ -81,6 +57,30 @@ pub const COMMANDS: [CommandSpec; 11] = [
         description: "resume a previous session",
         shortcut: "",
         command: SlashCommand::Sessions,
+    },
+    CommandSpec {
+        name: "/provider",
+        description: "choose provider and run diagnostics",
+        shortcut: "",
+        command: SlashCommand::Provider,
+    },
+    CommandSpec {
+        name: "/setup",
+        description: "open local setup wizard",
+        shortcut: "",
+        command: SlashCommand::Setup,
+    },
+    CommandSpec {
+        name: "/theme",
+        description: "choose theme with live preview",
+        shortcut: "",
+        command: SlashCommand::Theme,
+    },
+    CommandSpec {
+        name: "/help",
+        description: "show commands and shortcuts",
+        shortcut: "?",
+        command: SlashCommand::Help,
     },
     CommandSpec {
         name: "/quit",

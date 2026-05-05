@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.2 - TUI Command and Layout Polish - 2026-05-05
+
+This patch release stabilizes the interactive TUI before v0.3.0 work begins.
+
+### Fixed
+
+- Fixed slash command results so `/status`, `/doctor`, `/config`, `/history`, `/provider`, `/theme`, `/sessions`, and `/clear` render useful session events instead of silently changing state or only updating the status line.
+- Fixed command history persistence so submitted commands and palette-selected commands are saved immediately.
+- Fixed provider picker confirmation so selecting Codex CLI runs the check, accepts the provider, and closes the picker when the provider is found.
+- Fixed session picker keyboard selection coverage and command-result accumulation across consecutive slash commands.
+
+### Changed
+
+- Updated TUI version labels to use the package version automatically.
+- Reduced dashboard header density and removed the `more CHANGELOG` prompt from the home view.
+- Restored the home dashboard `Recent Sessions` section while keeping the TUI ready for v0.3.0 repo-aware routing work.
+
+### Quality
+
+- Expanded TUI contract coverage for command output, provider selection, history rendering, session selection, palette limits, autoscroll behavior, and layout/version expectations.
+
 ## 0.2.1 - TUI CI Smoke Fix - 2026-05-03
 
 This patch release fixes TUI smoke testing in non-interactive CI environments.

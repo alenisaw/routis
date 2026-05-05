@@ -8,7 +8,10 @@ use routis::tui::{
     history::ShellHistory,
     render::{mascot_lines, render_app},
     session::make_session_title,
-    state::{select_codex_candidate, AppMode, AppState, LayoutMode, SessionPhase, SetupStep},
+    state::{
+        select_codex_candidate, AppMode, AppState, LayoutMode, ProviderDiagnostics, SessionPhase,
+        SetupStep,
+    },
 };
 
 #[test]
@@ -53,7 +56,7 @@ fn setup_screen_uses_left_mascot_right_copy_and_no_outer_frame() {
     let state = AppState::setup();
     let text = render_to_text(120, 36, &state);
 
-    assert!(text.contains("Routis Setup v0.2.0"));
+    assert!(text.contains("Routis Setup v0.2.2"));
     assert!(text.contains("Welcome to Routis!"));
     assert!(text.contains("What this setup does"));
     assert!(text.contains("1  Start setup"));
@@ -233,33 +236,60 @@ fn slash_palette_is_filterable_and_rich_enough() {
 
     assert!(state.ui.command_palette_open);
     assert!(text.contains("/status"));
-    assert!(text.contains("/setup"));
-    assert!(text.contains("check provider"));
+    assert!(text.contains("/doctor"));
+    assert!(text.contains("/history"));
+    assert!(!text.contains("/provider"));
+    assert!(!text.contains("/sessions"));
     assert!(!text.contains("Run a security review"));
     assert!(!text.contains("routis>"));
+
+    state.ui.input = "/se".to_string();
+    let filtered = render_to_text(140, 44, &state);
+    assert!(filtered.contains("/sessions"));
 }
 
 #[test]
 fn command_palette_uses_dedicated_bottom_panel() {
     let mut state = AppState::home();
-    handle_key_for_test(
-        &mut state,
-        KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
-    );
+    state.ui.input = "/p".to_string();
+    state.ui.command_palette_open = true;
 
     let text = render_to_text(150, 44, &state);
     let lines = text.lines().collect::<Vec<_>>();
     let command_y = lines
         .iter()
-        .position(|line| line.contains("/status"))
+        .position(|line| line.contains("/provider"))
         .unwrap();
     let rule_y = lines
         .iter()
         .rposition(|line| line.contains("─") || line.contains("в”Ђ"))
         .unwrap();
 
-    assert!(command_y > 28);
+    assert!(command_y > 20);
     assert!(command_y < rule_y);
+}
+
+#[test]
+fn command_selected_from_palette_is_saved_to_history() {
+    let mut state = AppState::home();
+    let mut history = ShellHistory::new(10);
+    handle_key_with_history_for_test(
+        &mut state,
+        &mut history,
+        KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+    );
+    handle_key_with_history_for_test(
+        &mut state,
+        &mut history,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+
+    assert_eq!(history.entries(), &["/status"]);
+    assert!(state
+        .session
+        .events
+        .iter()
+        .any(|event| event.title == "Command result"));
 }
 
 #[test]
@@ -293,6 +323,35 @@ fn sessions_command_opens_selectable_session_picker() {
 
     assert_eq!(state.mode, AppMode::Session);
     assert_eq!(state.session.title, "second");
+}
+
+#[test]
+fn sessions_picker_switches_selection_with_arrow_keys() {
+    let mut state = AppState::home();
+    let mut history = ShellHistory::new(10);
+    history.push("first task");
+    history.push("second task");
+    state.ui.input = "/sessions".to_string();
+
+    handle_key_with_history_for_test(
+        &mut state,
+        &mut history,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+    handle_key_with_history_for_test(
+        &mut state,
+        &mut history,
+        KeyEvent::new(KeyCode::Down, KeyModifiers::NONE),
+    );
+    handle_key_with_history_for_test(
+        &mut state,
+        &mut history,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+
+    assert_eq!(state.mode, AppMode::Session);
+    assert_eq!(state.session.title, "first");
+    assert_eq!(state.session.current_task, "first task");
 }
 
 #[test]
@@ -339,7 +398,16 @@ fn sessions_command_does_not_dump_sessions_into_chat() {
     );
 
     assert!(state.ui.command_palette_open);
-    assert!(state.session.events.is_empty());
+    assert!(state
+        .session
+        .events
+        .iter()
+        .any(|event| event.title == "Command result"));
+    assert!(!state
+        .session
+        .events
+        .iter()
+        .any(|event| event.title == "Recent sessions"));
 }
 
 #[test]
@@ -359,6 +427,31 @@ fn theme_command_opens_inline_picker_without_setup() {
     assert!(text.contains("Choose theme"));
     assert!(text.contains("Routis Cyan"));
     assert!(text.contains("Monochrome"));
+}
+
+#[test]
+fn provider_picker_enter_checks_and_accepts_codex_provider() {
+    let mut state = AppState::home();
+    state.provider_diagnostics = ProviderDiagnostics {
+        command: "Found".to_string(),
+        version: "codex-cli 0.128.0".to_string(),
+        auth_status: "Ready to use local Codex CLI".to_string(),
+        config_path: "C:\\Users\\alenk\\.routis\\config.toml".to_string(),
+    };
+    state.ui.input = "/provider".to_string();
+
+    handle_key_for_test(
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+    handle_key_for_test(
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+
+    assert_eq!(state.config.provider, "Codex CLI");
+    assert!(!state.ui.command_palette_open);
+    assert!(state.ui.status_line.contains("Codex CLI Found"));
 }
 
 #[test]
@@ -420,7 +513,7 @@ fn home_header_has_greeting_metrics_and_dotted_internal_dividers() {
     let state = AppState::home();
     let text = render_to_text(150, 44, &state);
 
-    assert!(text.contains("Routis v0.2.0"));
+    assert!(text.contains("Routis v0.2.2"));
     assert!(text.contains("Welcome,"));
     assert!(text.contains("Workspace:"));
     assert!(text.contains("~/"));
@@ -437,6 +530,8 @@ fn home_header_has_greeting_metrics_and_dotted_internal_dividers() {
     assert!(text.contains("output   "));
     assert!(text.contains("total    "));
     assert!(text.contains("Recent Sessions"));
+    assert!(!text.contains("CHANGELOG"));
+    assert!(!text.contains("more"));
     assert!(text.contains("provider"));
     assert!(!text.contains("tasks    "));
     assert!(text.contains("┊"));
@@ -504,6 +599,8 @@ fn session_timeline_uses_plain_routis_execution_flow() {
 
     let text = render_to_text(150, 48, &state);
 
+    assert!(text.contains("active-session"));
+    assert!(!text.contains("debug-auth-flow"));
     assert!(text.contains("You"));
     assert!(text.contains("Routis"));
     assert!(text.contains("Command preview"));
@@ -513,6 +610,28 @@ fn session_timeline_uses_plain_routis_execution_flow() {
     assert!(text.contains("└─"));
     assert!(!text.contains("Security policy"));
     assert!(!text.contains("security-strict"));
+}
+
+#[test]
+fn session_timeline_follows_bottom_when_new_prompt_starts() {
+    let mut state = AppState::home();
+    for index in 0..12 {
+        state.session.events.push(routis::tui::state::SessionEvent {
+            source: "Routis".to_string(),
+            title: format!("old event {index}"),
+            lines: vec!["detail".to_string()],
+        });
+    }
+    state.ui.input = "fresh prompt".to_string();
+
+    handle_key_for_test(
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+
+    let text = render_to_text(120, 36, &state);
+    assert!(text.contains("fresh prompt"));
+    assert!(!text.contains("old event 0"));
 }
 
 #[test]
@@ -549,6 +668,73 @@ fn slash_command_result_renders_in_session_area() {
 }
 
 #[test]
+fn status_doctor_config_and_history_render_useful_command_blocks() {
+    let mut history = ShellHistory::new(10);
+    history.push("debug auth flow");
+    history.push("update docs");
+
+    for command in ["/status", "/doctor", "/config", "/history"] {
+        let mut state = AppState::home();
+        state.ui.input = command.to_string();
+        handle_key_with_history_for_test(
+            &mut state,
+            &mut history,
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+        );
+
+        let event = state
+            .session
+            .events
+            .iter()
+            .find(|event| event.title == "Command result")
+            .unwrap_or_else(|| panic!("{command} did not render a command result"));
+        assert!(
+            event.lines.len() >= 3,
+            "{command} rendered too little detail: {:?}",
+            event.lines
+        );
+    }
+
+    let mut state = AppState::home();
+    state.ui.input = "/history".to_string();
+    handle_key_with_history_for_test(
+        &mut state,
+        &mut history,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+    let text = render_to_text(150, 44, &state);
+    assert!(text.contains("debug auth flow"));
+    assert!(text.contains("update docs"));
+}
+
+#[test]
+fn slash_commands_append_results_without_replacing_previous_events() {
+    let mut state = AppState::home();
+    let mut history = ShellHistory::new(10);
+
+    for command in ["/status", "/doctor", "/config", "/history"] {
+        state.ui.input = command.to_string();
+        handle_key_with_history_for_test(
+            &mut state,
+            &mut history,
+            KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+        );
+    }
+
+    let command_results = state
+        .session
+        .events
+        .iter()
+        .filter(|event| event.title == "Command result")
+        .count();
+    assert_eq!(command_results, 4);
+    assert_eq!(
+        history.entries(),
+        &["/status", "/doctor", "/config", "/history"]
+    );
+}
+
+#[test]
 fn slash_command_history_survives_next_prompt() {
     let mut state = AppState::home();
     state.ui.input = "/status".to_string();
@@ -562,8 +748,12 @@ fn slash_command_history_survives_next_prompt() {
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
     );
 
+    assert!(state
+        .session
+        .events
+        .iter()
+        .any(|event| event.title == "Command result"));
     let text = render_to_text(150, 44, &state);
-    assert!(text.contains("Command result"));
     assert!(text.contains("next task"));
 }
 
@@ -583,14 +773,16 @@ fn clear_command_does_not_drop_session_command_history() {
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
     );
 
-    assert!(state.session.events.is_empty());
+    assert_eq!(state.session.events.len(), 1);
+    assert_eq!(state.session.events[0].title, "Command result");
+    assert_eq!(state.session.events[0].lines, vec!["view cleared"]);
     assert_eq!(state.session.phase, SessionPhase::Idle);
 }
 
 #[test]
 fn every_slash_command_records_a_session_result() {
     for spec in COMMANDS {
-        if matches!(spec.name, "/provider" | "/theme" | "/sessions" | "/clear") {
+        if spec.name == "/quit" {
             continue;
         }
         let mut state = AppState::home();
@@ -605,7 +797,7 @@ fn every_slash_command_records_a_session_result() {
                 .session
                 .events
                 .iter()
-                .any(|event| matches!(event.title.as_str(), "Command result" | "Recent sessions")),
+                .any(|event| event.title == "Command result"),
             "{} did not record a command result",
             spec.name
         );
@@ -848,7 +1040,7 @@ fn shell_layout_survives_required_terminal_sizes() {
     ] {
         let text = render_to_text(width, height, &AppState::home());
 
-        assert!(text.contains("Routis v0.2.0"));
+        assert!(text.contains("Routis v0.2.2"));
         assert!(text.contains("Type a task or / for commands"));
         assert!(text.contains("Metrics"));
         assert!(
@@ -867,7 +1059,7 @@ fn shell_layout_survives_required_terminal_sizes() {
 fn shell_too_small_fallback_is_plain_and_safe() {
     let text = render_to_text(79, 23, &AppState::home());
 
-    assert!(text.contains("Routis v0.2.0"));
+    assert!(text.contains("Routis v0.2.2"));
     assert!(text.contains("Terminal too small."));
     assert!(text.contains("80x24"));
 }
