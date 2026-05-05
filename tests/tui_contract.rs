@@ -618,6 +618,19 @@ fn home_header_has_greeting_metrics_and_dotted_internal_dividers() {
     assert!(!text.contains("cwd:"));
     assert!(!text.contains("security-strict"));
     assert!(!text.contains("security-first"));
+
+    let lines = text.lines().collect::<Vec<_>>();
+    let releases_rule_y = lines
+        .iter()
+        .position(|line| line.contains("Recent Sessions"))
+        .and_then(|index| index.checked_sub(1))
+        .unwrap();
+    let metrics_context_y = lines
+        .iter()
+        .position(|line| line.contains("context  ["))
+        .unwrap();
+    assert!(lines[releases_rule_y].contains("────────────────"));
+    assert_eq!(releases_rule_y, metrics_context_y.saturating_sub(1));
 }
 
 #[test]

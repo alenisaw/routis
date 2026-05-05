@@ -143,6 +143,7 @@ fn render_updates_commands(frame: &mut Frame, area: Rect, palette: ThemePalette)
         Line::styled("Releases", palette.section_title()),
         bullet(release_notes()[0], area.width, palette),
         bullet(release_notes()[1], area.width, palette),
+        Line::raw(""),
         section_rule(area.width, palette),
         Line::styled("Recent Sessions", palette.section_title()),
     ];
