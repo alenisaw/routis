@@ -2,13 +2,14 @@
 #![deny(warnings)]
 
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 use std::{
     fs,
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionRecord {
     pub schema_version: u32,
     pub id: String,
@@ -67,8 +68,8 @@ impl SessionStore {
         fs::create_dir_all(&self.path)
             .with_context(|| format!("failed to create `{}`", self.path.display()))?;
         fs::write(
-            self.path.join(format!("{}.session", record.id)),
-            serialize(record),
+            self.path.join(format!("{}.json", record.id)),
+            serde_json::to_string_pretty(record)?,
         )
         .with_context(|| format!("failed to write session `{}`", record.id))
     }
@@ -82,11 +83,13 @@ impl SessionStore {
             .with_context(|| format!("failed to read `{}`", self.path.display()))?
         {
             let entry = entry?;
-            if entry.path().extension().and_then(|value| value.to_str()) != Some("session") {
+            let path = entry.path();
+            let extension = path.extension().and_then(|value| value.to_str());
+            if !matches!(extension, Some("json" | "session")) {
                 continue;
             }
-            let raw = fs::read_to_string(entry.path())?;
-            if let Some(record) = deserialize(&raw) {
+            let raw = fs::read_to_string(path)?;
+            if let Some(record) = deserialize_record(&raw) {
                 records.push(record);
             }
         }
@@ -115,25 +118,13 @@ pub fn default_session_store_path() -> PathBuf {
     crate::tui::config::routis_dir().join("sessions")
 }
 
-fn serialize(record: &SessionRecord) -> String {
-    [
-        format!("schema_version={}", record.schema_version),
-        format!("id={}", record.id),
-        format!("title={}", record.title),
-        format!("task={}", escape(&record.task)),
-        format!("branch={}", escape(&record.branch)),
-        format!("policy={}", record.policy),
-        format!("effective_profile={}", record.effective_profile),
-        format!("model={}", record.model),
-        format!("reasoning={}", record.reasoning),
-        format!("created_at={}", record.created_at),
-        format!("updated_at={}", record.updated_at),
-        format!("routing_count={}", record.routing_count),
-    ]
-    .join("\n")
+fn deserialize_record(raw: &str) -> Option<SessionRecord> {
+    serde_json::from_str(raw)
+        .ok()
+        .or_else(|| deserialize_legacy(raw))
 }
 
-fn deserialize(raw: &str) -> Option<SessionRecord> {
+fn deserialize_legacy(raw: &str) -> Option<SessionRecord> {
     let value = |key: &str| {
         raw.lines()
             .filter_map(|line| line.split_once('='))
@@ -173,10 +164,6 @@ fn slug(value: &str) -> String {
     } else {
         slug
     }
-}
-
-fn escape(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('\n', "\\n")
 }
 
 fn unescape(value: &str) -> String {
@@ -251,5 +238,24 @@ mod tests {
         );
         assert_eq!(store.find(&id_prefix).unwrap().unwrap().title, record.title);
         assert!(store.find("missing").unwrap().is_none());
+    }
+
+    #[test]
+    fn session_store_preserves_literal_backslash_n() {
+        let dir = TempDir::new().unwrap();
+        let store = SessionStore::new(dir.path().join("sessions"));
+        let record = SessionRecord::new(
+            r"keep literal \n in task",
+            "main",
+            "default",
+            "balanced",
+            "gpt-5.5",
+            "medium",
+        );
+
+        store.save(&record).unwrap();
+
+        let stored = store.find(&record.title).unwrap().unwrap();
+        assert_eq!(stored.task, r"keep literal \n in task");
     }
 }

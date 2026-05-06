@@ -5,14 +5,13 @@ use crate::tui::{
     history::{default_history_path, ShellHistory},
     render::render_app,
     state::{
-        detect_provider_diagnostics, theme_name, AppMode, AppState, PaletteMode, SessionPhase,
-        SessionPickerItem, SetupStep, THEME_MAX,
+        detect_provider_diagnostics, theme_name, AppMode, AppState, ConfirmationChoice,
+        PaletteMode, SessionPhase, SessionPickerItem, SetupStep, THEME_MAX,
     },
 };
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{backend::CrosstermBackend, Terminal};
-use routis_context::collect_repo_context;
 use std::{io::Stdout, time::Duration};
 
 pub async fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
@@ -91,6 +90,10 @@ fn handle_key(state: &mut AppState, key: KeyEvent, history: &mut ShellHistory) -
         return Ok(handle_palette_key(state, key, history));
     }
 
+    if state.mode == AppMode::Session && state.session.phase == SessionPhase::AwaitingConfirmation {
+        return Ok(handle_confirmation_key(state, key));
+    }
+
     match key.code {
         KeyCode::Esc => {
             if state.mode == AppMode::Session
@@ -138,6 +141,27 @@ fn handle_key(state: &mut AppState, key: KeyEvent, history: &mut ShellHistory) -
         _ => {}
     }
     Ok(false)
+}
+
+fn handle_confirmation_key(state: &mut AppState, key: KeyEvent) -> bool {
+    match key.code {
+        KeyCode::Esc => state.cancel_session(),
+        KeyCode::Up => state.ui.confirmation_index = state.ui.confirmation_index.saturating_sub(1),
+        KeyCode::Down => {
+            state.ui.confirmation_index =
+                (state.ui.confirmation_index + 1).min(ConfirmationChoice::ALL.len() - 1);
+        }
+        KeyCode::Char('1') => state.ui.confirmation_index = 0,
+        KeyCode::Char('2') => state.ui.confirmation_index = 1,
+        KeyCode::Char('p') | KeyCode::Char('P') => confirm_provider_execution(state),
+        KeyCode::Char('c') | KeyCode::Char('C') => state.cancel_session(),
+        KeyCode::Enter => match ConfirmationChoice::ALL[state.ui.confirmation_index] {
+            ConfirmationChoice::Proceed => confirm_provider_execution(state),
+            ConfirmationChoice::Decline => state.cancel_session(),
+        },
+        _ => {}
+    }
+    false
 }
 
 pub fn handle_key_for_test(state: &mut AppState, key: KeyEvent) {
@@ -532,7 +556,7 @@ fn apply_command(
                     format!("policy file: {}", state.config.policy_file),
                     format!("branch: {}", state.repo_context.branch),
                     format!("changed files: {}", state.repo_context.changed_files),
-                    format!("risk zones: {}", state.repo_context.risk_zones),
+                    format!("impact area: {}", state.repo_context.impact_area),
                     format!("mode: {:?}", state.mode),
                 ],
             );
@@ -603,23 +627,16 @@ fn apply_command(
             clear_view(state);
         }
         Ok(SlashCommand::Context) => {
-            let lines = match collect_repo_context(std::env::current_dir().unwrap_or_default()) {
+            let lines = match crate::route_plan::collect_repo_context_for_cwd(
+                std::env::current_dir().unwrap_or_default(),
+            ) {
                 Ok(context) => {
                     state.repo_context = repo_context_state_from_context(&context);
-                    let risk_zones = if context.risk_zone_hints.is_empty() {
-                        "-".to_string()
-                    } else {
-                        context
-                            .risk_zone_hints
-                            .iter()
-                            .map(|zone| zone.as_str())
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    };
+                    let impact_area = crate::route_plan::format_impact_area(&context);
                     let mut lines = vec![
                         format!("branch: {}", context.branch.as_deref().unwrap_or("-")),
                         format!("changed files: {}", context.changed_files.len()),
-                        format!("risk zones: {risk_zones}"),
+                        format!("impact area: {impact_area}"),
                     ];
                     lines.extend(
                         context
@@ -644,13 +661,31 @@ fn apply_command(
                 .nth(1)
                 .unwrap_or("configs/policies/default.yaml")
                 .to_string();
-            state.config.policy_file = path.clone();
-            state.ui.status_line = format!("policy file set: {path}");
-            push_command_event(
-                state,
-                "Command result",
-                vec![format!("policy file: {path}")],
-            );
+            let repo_root = std::env::current_dir()
+                .ok()
+                .and_then(|cwd| crate::route_plan::discover_repo_root(&cwd));
+            match crate::route_plan::load_policy(&path, repo_root.as_deref()) {
+                Ok(_) => {
+                    state.config.policy_file = path.clone();
+                    state.ui.status_line = format!("policy file set: {path}");
+                    push_command_event(
+                        state,
+                        "Command result",
+                        vec![format!("policy file: {path}")],
+                    );
+                }
+                Err(error) => {
+                    state.ui.status_line = format!("policy file rejected: {error}");
+                    push_command_event(
+                        state,
+                        "Command result",
+                        vec![
+                            format!("policy file rejected: {path}"),
+                            format!("error: {error}"),
+                        ],
+                    );
+                }
+            }
             record_result = false;
         }
         Ok(SlashCommand::History) => {
@@ -685,7 +720,9 @@ fn apply_command(
 }
 
 fn sync_repo_context(state: &mut AppState) {
-    if let Ok(context) = collect_repo_context(std::env::current_dir().unwrap_or_default()) {
+    if let Ok(context) =
+        crate::route_plan::collect_repo_context_for_cwd(std::env::current_dir().unwrap_or_default())
+    {
         state.repo_context = repo_context_state_from_context(&context);
     }
 }
@@ -696,16 +733,7 @@ fn repo_context_state_from_context(
     crate::tui::state::RepoContextState {
         branch: context.branch.clone().unwrap_or_else(|| "-".to_string()),
         changed_files: context.changed_files.len(),
-        risk_zones: if context.risk_zone_hints.is_empty() {
-            "-".to_string()
-        } else {
-            context
-                .risk_zone_hints
-                .iter()
-                .map(|zone| zone.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
-        },
+        impact_area: crate::route_plan::format_impact_area(context),
     }
 }
 
@@ -842,9 +870,7 @@ fn handle_session_confirmation(state: &mut AppState, input: &str) -> bool {
 
     match input.trim().to_ascii_lowercase().as_str() {
         "proceed" | "confirm" | "yes" => {
-            state.session.phase = SessionPhase::Ready;
-            state.ui.status_line = "confirmed: provider execution can start".to_string();
-            state.ui.input.clear();
+            confirm_provider_execution(state);
             true
         }
         "edit" => {
@@ -860,6 +886,12 @@ fn handle_session_confirmation(state: &mut AppState, input: &str) -> bool {
         }
         _ => false,
     }
+}
+
+fn confirm_provider_execution(state: &mut AppState) {
+    state.session.phase = SessionPhase::Ready;
+    state.ui.status_line = "confirmed: provider execution can start".to_string();
+    state.ui.input.clear();
 }
 
 fn clear_view(state: &mut AppState) {

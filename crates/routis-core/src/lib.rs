@@ -177,6 +177,10 @@ fn classify_task(task: &str) -> Classification {
             "small fix",
             "update readme",
             "docs",
+            "readme",
+            "опечат",
+            "ошибк",
+            "док",
         ],
         0,
     );
@@ -191,6 +195,15 @@ fn classify_task(task: &str) -> Classification {
             "add test",
             "refactor small",
             "feature",
+            "create",
+            "new module",
+            "module",
+            "добав",
+            "созда",
+            "сдела",
+            "модул",
+            "проверь",
+            "прочека",
         ],
         1,
     );
@@ -206,6 +219,11 @@ fn classify_task(task: &str) -> Classification {
             "migration",
             "edge case",
             "bug",
+            "почин",
+            "исправ",
+            "отлад",
+            "баг",
+            "ошибка",
         ],
         2,
     );
@@ -220,6 +238,11 @@ fn classify_task(task: &str) -> Classification {
             "large refactor",
             "rewrite",
             "rework everything",
+            "whole project",
+            "весь проект",
+            "весь реп",
+            "архитектур",
+            "перепиш",
         ],
         3,
     );
@@ -241,11 +264,43 @@ fn classify_task(task: &str) -> Classification {
             "across all files",
             "entire repo",
             "whole repo",
+            "this repo",
             "all files",
+            "весь проект",
+            "этот проект",
+            "весь реп",
+            "этот реп",
+            "везде",
+            "все файлы",
         ],
     ) {
         matched.push("up-modifier".to_string());
         resolved_score += 1;
+    }
+
+    if normalized.contains("readme") && contains_any(&normalized, &["check", "прочекай", "проверь"])
+    {
+        matched.push("readme-check".to_string());
+        resolved_score = resolved_score.min(0);
+    }
+
+    if contains_any(
+        &normalized,
+        &[
+            "analyze repo",
+            "analyze repository",
+            "analyze the repo",
+            "analyze the repository",
+            "create module",
+            "new module",
+            "module for this repo",
+            "создай модуль",
+            "новый модуль",
+            "модуль для",
+        ],
+    ) {
+        matched.push("module-scope".to_string());
+        resolved_score = resolved_score.max(2);
     }
 
     let profile = match resolved_score.clamp(0, 3) {
@@ -407,5 +462,22 @@ mod tests {
     fn parses_policy_aliases() {
         assert_eq!("extra-deep".parse::<Profile>().unwrap(), Profile::ExtraDeep);
         assert_eq!("auto".parse::<Profile>().unwrap(), Profile::Default);
+    }
+
+    #[test]
+    fn russian_repo_module_request_routes_deep() {
+        let decision = route_task("создай новый модуль для этого репо", Profile::Default).unwrap();
+
+        assert_eq!(decision.effective_profile, Profile::Deep);
+        assert!(decision
+            .signals_matched
+            .contains(&"module-scope".to_string()));
+    }
+
+    #[test]
+    fn readme_check_stays_cheap() {
+        let decision = route_task("прочекай README.md на ошибки", Profile::Default).unwrap();
+
+        assert_eq!(decision.effective_profile, Profile::Cheap);
     }
 }

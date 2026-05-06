@@ -28,6 +28,7 @@ pub struct RepoContext {
     pub risk_zone_hints: Vec<RiskZone>,
     pub branch: Option<String>,
     pub commit_count_since_main: Option<usize>,
+    pub repo_markers: Vec<String>,
 }
 
 pub fn collect_repo_context(cwd: impl AsRef<Path>) -> Result<RepoContext, ContextError> {
@@ -43,6 +44,7 @@ pub fn collect_repo_context(cwd: impl AsRef<Path>) -> Result<RepoContext, Contex
         changed_files,
         branch: current_branch(cwd)?,
         commit_count_since_main: commit_count_since_main(cwd)?,
+        repo_markers: repo_markers(cwd),
     })
 }
 
@@ -231,6 +233,29 @@ fn run_git<const N: usize>(
         })
 }
 
+fn repo_markers(cwd: &Path) -> Vec<String> {
+    let mut markers = Vec::new();
+    if cwd.join("Cargo.toml").exists() {
+        markers.push("rust".to_string());
+    }
+    if cwd.join("src/tui").exists() {
+        markers.push("tui".to_string());
+    }
+    if cwd.join("crates").exists() {
+        markers.push("workspace".to_string());
+    }
+    if cwd.join("tests").exists() {
+        markers.push("tests".to_string());
+    }
+    if cwd.join(".github/workflows").exists() {
+        markers.push("workflow".to_string());
+    }
+    if cwd.join("README.md").exists() {
+        markers.push("docs".to_string());
+    }
+    markers
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -311,6 +336,7 @@ mod tests {
             context.risk_zone_hints,
             vec![RiskZone::Config, RiskZone::Auth, RiskZone::Workflow]
         );
+        assert!(context.repo_markers.contains(&"docs".to_string()));
     }
 
     #[test]

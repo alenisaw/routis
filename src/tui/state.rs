@@ -92,7 +92,7 @@ pub struct ProviderDiagnostics {
 pub struct RepoContextState {
     pub branch: String,
     pub changed_files: usize,
-    pub risk_zones: String,
+    pub impact_area: String,
 }
 
 impl Default for RepoContextState {
@@ -100,7 +100,7 @@ impl Default for RepoContextState {
         Self {
             branch: "-".to_string(),
             changed_files: 0,
-            risk_zones: "-".to_string(),
+            impact_area: "-".to_string(),
         }
     }
 }
@@ -172,6 +172,24 @@ pub enum SessionPhase {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfirmationChoice {
+    Proceed,
+    Decline,
+}
+
+impl ConfirmationChoice {
+    pub const ALL: [Self; 2] = [Self::Proceed, Self::Decline];
+
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Proceed => "Proceed",
+            Self::Decline => "Decline",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaletteMode {
     Commands,
     Sessions,
@@ -231,6 +249,23 @@ pub struct MetricsState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CurrentPlanState {
+    pub profile: String,
+    pub model: String,
+    pub reasoning: String,
+}
+
+impl Default for CurrentPlanState {
+    fn default() -> Self {
+        Self {
+            profile: "default".to_string(),
+            model: "gpt-5.5".to_string(),
+            reasoning: "medium".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiState {
     pub input: String,
     pub status_line: String,
@@ -244,6 +279,7 @@ pub struct UiState {
     pub session_picker_query: String,
     pub history_cursor: Option<usize>,
     pub shortcuts_open: bool,
+    pub confirmation_index: usize,
 }
 
 impl Default for UiState {
@@ -261,6 +297,7 @@ impl Default for UiState {
             session_picker_query: String::new(),
             history_cursor: None,
             shortcuts_open: false,
+            confirmation_index: 0,
         }
     }
 }
@@ -272,6 +309,7 @@ pub struct AppState {
     pub config: ConfigState,
     pub provider_diagnostics: ProviderDiagnostics,
     pub repo_context: RepoContextState,
+    pub current_plan: CurrentPlanState,
     pub session: SessionState,
     pub metrics: MetricsState,
     pub ui: UiState,
@@ -286,6 +324,7 @@ impl AppState {
             config: ConfigState::default(),
             provider_diagnostics: detect_provider_diagnostics(),
             repo_context: RepoContextState::default(),
+            current_plan: CurrentPlanState::default(),
             session: SessionState::default(),
             metrics: MetricsState::default(),
             ui: UiState::default(),
@@ -366,6 +405,12 @@ impl AppState {
         self.metrics.total_tokens = self.metrics.input_tokens;
         self.metrics.context_percent = plan.context_percent;
         self.metrics.saved_percent = plan.saved_percent;
+        self.repo_context.branch = plan.branch.clone();
+        self.repo_context.changed_files = plan.changed_files;
+        self.repo_context.impact_area = plan.impact_area.clone();
+        self.current_plan.profile = plan.profile.clone();
+        self.current_plan.model = plan.model.clone();
+        self.current_plan.reasoning = plan.reasoning.clone();
         events.extend([
             SessionEvent {
                 source: "You".to_string(),
@@ -381,7 +426,9 @@ impl AppState {
                     format!("Profile: {}", plan.profile),
                     format!("Model: {}  reasoning: {}", plan.model, plan.reasoning),
                     format!("Repo: {} changed files", plan.changed_files),
-                    format!("Risk zones: {}", plan.risk_zones),
+                    format!("Impact Area: {}", plan.impact_area),
+                    format!("Policy: {}", plan.policy_source),
+                    format!("Reason: {}", plan.reason),
                 ],
             },
             SessionEvent {
@@ -399,6 +446,7 @@ impl AppState {
         self.ui.input.clear();
         self.ui.command_palette_open = false;
         self.ui.shortcuts_open = false;
+        self.ui.confirmation_index = 0;
     }
 
     pub fn cancel_session(&mut self) {
@@ -417,10 +465,15 @@ impl AppState {
 
     pub fn tick(&mut self) {
         self.ui.frame = self.ui.frame.wrapping_add(1);
-        if self.mode != AppMode::Session || self.session.phase == SessionPhase::Idle {
-            return;
-        }
-        if self.session.phase == SessionPhase::Cancelled {
+        if self.mode != AppMode::Session
+            || matches!(
+                self.session.phase,
+                SessionPhase::Idle
+                    | SessionPhase::Cancelled
+                    | SessionPhase::Ready
+                    | SessionPhase::AwaitingConfirmation
+            )
+        {
             return;
         }
         let max_lines = self.session_total_render_lines();
@@ -463,73 +516,24 @@ impl AppState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ExecutionPlan {
-    profile: String,
-    model: String,
-    reasoning: String,
-    changed_files: usize,
-    risk_zones: String,
-    context_percent: usize,
-    saved_percent: usize,
-}
-
-fn execution_plan(task: &str, state: &AppState) -> ExecutionPlan {
-    let fallback = || ExecutionPlan {
-        profile: "default".to_string(),
-        model: state.config.model.clone(),
-        reasoning: state.config.reasoning.clone(),
+fn execution_plan(task: &str, state: &AppState) -> crate::route_plan::ExecutionPlan {
+    crate::route_plan::build_execution_plan(
+        task,
+        &state.config.policy_file,
+        std::env::current_dir().unwrap_or_default(),
+    )
+    .unwrap_or_else(|_| crate::route_plan::ExecutionPlan {
+        profile: "balanced".to_string(),
+        model: "gpt-5.5".to_string(),
+        reasoning: "medium".to_string(),
+        branch: state.repo_context.branch.clone(),
         changed_files: state.repo_context.changed_files,
-        risk_zones: state.repo_context.risk_zones.clone(),
+        impact_area: state.repo_context.impact_area.clone(),
         context_percent: state.metrics.context_percent,
         saved_percent: state.metrics.saved_percent,
-    };
-
-    let Ok(policy) = routis_policy::PolicyFile::load(&state.config.policy_file) else {
-        return fallback();
-    };
-    let Ok(repo_context) =
-        routis_context::collect_repo_context(std::env::current_dir().unwrap_or_default())
-    else {
-        return fallback();
-    };
-    let Ok(mut decision) = routis_core::route_task_with_repo_context(
-        task,
-        routis_core::Profile::Default,
-        &repo_context.risk_zone_hints,
-        repo_context.changed_files.len(),
-    ) else {
-        return fallback();
-    };
-    decision.effective_profile = routis_policy::apply_policy_rules(
-        &policy,
-        decision.effective_profile,
-        &repo_context.risk_zone_hints,
-        &repo_context.changed_files,
-    );
-    let Some(execution) = policy.execution_config(decision.effective_profile) else {
-        return fallback();
-    };
-    let risk_zones = if repo_context.risk_zone_hints.is_empty() {
-        "-".to_string()
-    } else {
-        repo_context
-            .risk_zone_hints
-            .iter()
-            .map(|zone| zone.as_str())
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
-
-    ExecutionPlan {
-        profile: decision.effective_profile.as_str().to_string(),
-        model: execution.model.clone(),
-        reasoning: execution.reasoning.clone(),
-        changed_files: repo_context.changed_files.len(),
-        risk_zones,
-        context_percent: repo_context.changed_files.len().saturating_mul(6).min(100),
-        saved_percent: 32,
-    }
+        reason: "fallback plan after routing error".to_string(),
+        policy_source: "fallback".to_string(),
+    })
 }
 
 // ── Public name/index helpers ─────────────────────────────────────────────

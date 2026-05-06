@@ -1,6 +1,6 @@
 use crate::tui::{
     screens::home::render_header,
-    state::AppState,
+    state::{AppState, SessionPhase},
     theme::ThemePalette,
     widgets::{
         input::render_input,
@@ -38,28 +38,25 @@ pub fn render_shell(frame: &mut Frame, area: Rect, state: &AppState, palette: Th
     } else {
         Constraint::Min(4)
     };
-    let input_height = 1;
+    let input_height = input_block_height(state);
     let chunks = Layout::vertical([
         Constraint::Length(header_h),
-        Constraint::Length(1),
         body_constraint,
         Constraint::Length(palette_height),
-        Constraint::Length(1),
         Constraint::Length(input_height),
     ])
     .split(shell);
 
     let bounds = frame.area();
     render_header_block(frame, safe_rect(chunks[0], bounds), state, palette);
-    render_rule(frame, safe_rect(chunks[1], bounds), palette);
-    render_timeline(frame, safe_rect(chunks[2], bounds), state, palette);
+    render_timeline(frame, safe_rect(chunks[1], bounds), state, palette);
     if state.ui.command_palette_open {
         render_command_palette(
             frame,
             safe_rect(
                 Rect {
                     height: palette_height,
-                    ..chunks[3]
+                    ..chunks[2]
                 },
                 bounds,
             ),
@@ -67,8 +64,7 @@ pub fn render_shell(frame: &mut Frame, area: Rect, state: &AppState, palette: Th
             palette,
         );
     }
-    render_rule(frame, safe_rect(chunks[4], bounds), palette);
-    render_input(frame, safe_rect(chunks[5], bounds), state, palette);
+    render_input_block(frame, safe_rect(chunks[3], bounds), state, palette);
 }
 
 fn render_header_block(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
@@ -110,6 +106,38 @@ fn dashboard_height(area: Rect) -> u16 {
     desired.max(10).min(area.height.saturating_sub(7).max(10))
 }
 
+fn input_block_height(state: &AppState) -> u16 {
+    if state.session.phase == SessionPhase::AwaitingConfirmation && state.ui.input.is_empty() {
+        5
+    } else {
+        4
+    }
+}
+
+fn render_input_block(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    let input_height =
+        if state.session.phase == SessionPhase::AwaitingConfirmation && state.ui.input.is_empty() {
+            2
+        } else {
+            1
+        };
+    let chunks = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(input_height),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .split(area);
+
+    render_rule(frame, chunks[0], palette);
+    render_input(frame, chunks[1], state, palette);
+    render_rule(frame, chunks[2], palette);
+    render_runtime_line(frame, chunks[3], state, palette);
+}
+
 fn render_rule(frame: &mut Frame, area: Rect, palette: ThemePalette) {
     if area.width == 0 || area.height == 0 {
         return;
@@ -121,6 +149,72 @@ fn render_rule(frame: &mut Frame, area: Rect, palette: ThemePalette) {
         )),
         area,
     );
+}
+
+fn render_runtime_line(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    let status = session_state_label(state.session.phase);
+    let help = if state.session.phase == SessionPhase::AwaitingConfirmation {
+        "↑↓ choose  Enter confirm  Esc decline  ? help"
+    } else {
+        "Enter send  / commands  ? help  Esc back"
+    };
+    let line = format!(
+        "{}  {}  {}  profile {}  {}   {}",
+        provider_label(&state.config.provider),
+        state.current_plan.model,
+        state.current_plan.reasoning,
+        state.current_plan.profile,
+        status,
+        help
+    );
+    frame.render_widget(
+        Paragraph::new(Line::styled(
+            truncate_to_width(&line, area.width as usize),
+            palette.muted(),
+        )),
+        area,
+    );
+}
+
+fn session_state_label(phase: SessionPhase) -> &'static str {
+    match phase {
+        SessionPhase::Idle => "idle",
+        SessionPhase::Running => "planning",
+        SessionPhase::AwaitingConfirmation => "waiting",
+        SessionPhase::Cancelled => "stopped",
+        SessionPhase::Ready => "ready",
+    }
+}
+
+fn provider_label(value: &str) -> &str {
+    match value {
+        "Codex CLI" => "Codex",
+        "Claude Code" => "Claude",
+        other => other,
+    }
+}
+
+fn truncate_to_width(value: &str, max: usize) -> String {
+    use unicode_width::UnicodeWidthStr;
+
+    if UnicodeWidthStr::width(value) <= max {
+        return value.to_string();
+    }
+    let mut out = String::new();
+    let mut width = 0;
+    for ch in value.chars() {
+        let ch_width = UnicodeWidthStr::width(ch.to_string().as_str());
+        if width + ch_width + 3 > max {
+            break;
+        }
+        out.push(ch);
+        width += ch_width;
+    }
+    out.push_str("...");
+    out
 }
 
 fn safe_rect(area: Rect, bounds: Rect) -> Rect {

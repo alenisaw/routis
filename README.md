@@ -140,103 +140,30 @@ Useful TUI commands:
 | `/theme` | Open the theme picker with live preview |
 | `/sessions` | Open searchable recent-session selection |
 | `/history` | Show local history status |
-| `/context` | Show branch, changed files, and risk zones |
+| `/context` | Show branch, changed files, and Impact Area |
 | `/policy-file <path>` | Set the routing policy file for this shell |
 | `/clear` | Clear the current TUI timeline |
 | `/config` | Show the local config path |
 | `/quit` | Exit Routis |
 
-Route a task automatically:
-
-```bash
-routis "fix typo in README"
-```
-
-Pass the task with a flag:
-
-```bash
-routis --task "debug auth flow"
-```
-
-Show routing details:
-
-```bash
-routis --task "debug auth flow" --explain
-```
-
-Force a profile:
-
-```bash
-routis --policy deep "debug failing config loader"
-```
-
-Use a policy file:
-
-```bash
-routis --policy-file ./configs/policies/default.yaml "update config loader"
-```
-
-Show repository context:
-
-```bash
-routis context
-```
-
-List saved routing sessions:
-
-```bash
-routis session list
-routis session resume debug-auth-flow
-```
-
-Execute the generated Codex command:
-
-```bash
-routis --execute "implement config loader"
-```
-
-Without `--execute`, Routis stays in dry-run mode.
-
-Launch the v0.3.0 TUI:
+Launch the TUI:
 
 ```bash
 routis
 ```
 
+Enter a task in the input row. Routis plans locally, shows the selected profile, model, reasoning, branch, changed file count, and Impact Area, then waits for `proceed`, `edit`, or `cancel`.
+
 The TUI stores local config under `~/.routis/config.toml`, recent prompt history under `~/.routis/shell_history`, and route sessions under `~/.routis/sessions`. Provider diagnostics locate `codex` from the system PATH and run `codex --version`; on Windows, Routis prefers executable shims such as `.cmd` or `.exe` over blocked PowerShell scripts.
 
-## CLI Reference
+## Command Reference
 
 ```text
-routis [OPTIONS] [TASK]...
-routis context
-routis session list
-routis session resume <ID|TITLE>
-
-Arguments:
-  [TASK]...  Positional task text
+routis
 
 Options:
-      --task <TASK>         Task to route
-      --policy <POLICY>     Policy profile: cheap | balanced | deep | extradeep | default
-      --policy-file <PATH>  Load execution policy from a YAML file
-      --dry-run             Plan only, do not execute
-      --execute             Execute the planned Codex command
-      --explain             Show expanded routing detail
   -h, --help                Print help
   -V, --version             Print version
-```
-
-## Output Example
-
-```text
-Requested policy:  default
-Effective profile: deep
-Codex command:     codex exec -m gpt-5.5 --reasoning high -- "debug auth flow"
-Execution mode:    dry-run
-
-Signals matched:   ["debug"]
-Routing reason:    Auto-selected `deep` from signals: debug.
 ```
 
 ## Policy File
@@ -276,7 +203,7 @@ rules:
     max_profile: cheap
 ```
 
-Policy rules apply only in automatic `default` routing. An explicit `--policy cheap`, `--policy balanced`, `--policy deep`, or `--policy extradeep` remains authoritative.
+Policy rules apply to the automatic TUI route planner. A rule must define `if_risk_zone` or `if_path`; empty matchers are rejected.
 
 ## Development
 
@@ -292,8 +219,6 @@ cargo build --release
 Run locally:
 
 ```bash
-cargo run -- "fix typo in README"
-cargo run -- --explain "debug failing route selection"
 cargo run
 ```
 

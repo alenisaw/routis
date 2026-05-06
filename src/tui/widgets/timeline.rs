@@ -69,27 +69,21 @@ pub fn render_timeline(frame: &mut Frame, area: Rect, state: &AppState, palette:
 
         lines.truncate(state.session.visible_lines.max(1).saturating_add(1));
 
-        // Animated phase indicator appended below visible events
         match state.session.phase {
-            SessionPhase::Running => lines.push(Line::from(vec![
-                Span::styled("   └─ ", palette.dim()),
-                Span::styled(spinner(state.ui.frame), palette.cyan().bold()),
-                Span::styled("  processing…", palette.muted()),
-            ])),
+            SessionPhase::Running => {
+                lines.extend(running_lines(state.ui.frame, area.width, palette));
+            }
             SessionPhase::AwaitingConfirmation => lines.push(Line::from(vec![
                 Span::styled("   └─ ", palette.dim()),
-                Span::styled(
-                    "◆  Awaiting confirmation — type 'proceed' or 'cancel'",
-                    palette.warning().bold(),
-                ),
+                Span::styled("Awaiting confirmation", palette.warning().bold()),
             ])),
             SessionPhase::Ready => lines.push(Line::from(vec![
                 Span::styled("   └─ ", palette.dim()),
-                Span::styled("✓  Confirmed — ready to execute", palette.success().bold()),
+                Span::styled("Confirmed - ready to execute", palette.success().bold()),
             ])),
             SessionPhase::Cancelled => lines.push(Line::from(vec![
                 Span::styled("   └─ ", palette.dim()),
-                Span::styled("✗  Session stopped", palette.error()),
+                Span::styled("Session stopped", palette.error()),
             ])),
             SessionPhase::Idle => {}
         }
@@ -109,8 +103,6 @@ pub fn render_timeline(frame: &mut Frame, area: Rect, state: &AppState, palette:
         area,
     );
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────
 
 fn phase_badge(phase: SessionPhase, palette: ThemePalette) -> (&'static str, Style) {
     match phase {
@@ -146,8 +138,8 @@ fn detail_style(line: &str, palette: ThemePalette) -> Style {
         palette.error()
     } else if line.starts_with("Prompt:") {
         palette.cyan().italic()
-    } else if line.contains("codex exec") || line.contains("Command preview") {
-        palette.cyan()
+    } else if line.contains("Impact Area") {
+        palette.accent().bold()
     } else if line.contains("checked") || line.contains("resolved") || line.contains("Found") {
         palette.success()
     } else {
@@ -173,7 +165,30 @@ fn shortcut_lines(palette: ThemePalette) -> Vec<Line<'static>> {
     ]
 }
 
+fn running_lines(frame: u64, width: u16, palette: ThemePalette) -> Vec<Line<'static>> {
+    let bar_width = (width as usize).saturating_sub(18).clamp(8, 28);
+    let head = (frame as usize) % bar_width;
+    let mut bar = String::with_capacity(bar_width);
+    for index in 0..bar_width {
+        let symbol = match index.abs_diff(head) {
+            0 => "#",
+            1 => "=",
+            2 => "-",
+            _ => ".",
+        };
+        bar.push_str(symbol);
+    }
+
+    vec![Line::from(vec![
+        Span::styled("   └─ ", palette.dim()),
+        Span::styled(spinner(frame), palette.cyan().bold()),
+        Span::raw("  "),
+        Span::styled(bar, palette.cyan()),
+        Span::styled("  planning", palette.muted()),
+    ])]
+}
+
 fn spinner(frame: u64) -> &'static str {
-    const FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    const FRAMES: [&str; 4] = ["|", "/", "-", "\\"];
     FRAMES[(frame as usize) % FRAMES.len()]
 }

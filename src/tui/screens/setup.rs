@@ -272,65 +272,7 @@ fn render_setup_choices(frame: &mut Frame, area: Rect, state: &AppState, palette
             );
         }
 
-        SetupStep::Provider => frame.render_widget(
-            Paragraph::new(vec![
-                selectable(
-                    "1  Codex CLI",
-                    "recommended · OpenAI Codex",
-                    state.setup.provider_index == 0,
-                    palette,
-                ),
-                selectable(
-                    "2  Claude Code",
-                    "planned",
-                    state.setup.provider_index == 1,
-                    palette,
-                ),
-                selectable(
-                    "3  Custom OpenAI-compatible",
-                    "planned",
-                    state.setup.provider_index == 2,
-                    palette,
-                ),
-                Line::raw(""),
-                Line::styled("Provider check", palette.accent().bold()),
-                Line::styled(
-                    if !state.setup.provider_checked {
-                        "press Enter to run provider check"
-                    } else if state.provider_diagnostics.command == "Found" {
-                        "checked: press Enter again to continue"
-                    } else {
-                        "not found: fix PATH or install Codex CLI, then press Enter to check again"
-                    },
-                    if state.setup.provider_checked && state.provider_diagnostics.command == "Found"
-                    {
-                        palette.success()
-                    } else {
-                        palette.warning()
-                    },
-                ),
-                kv_line("binary", &state.provider_diagnostics.command, palette),
-                kv_line("version", &state.provider_diagnostics.version, palette),
-                kv_line("config", &state.provider_diagnostics.config_path, palette),
-                kv_line("auth", &state.provider_diagnostics.auth_status, palette),
-                Line::raw(""),
-                Line::styled(
-                    if state.setup.provider_checked && state.provider_diagnostics.command == "Found"
-                    {
-                        "✓  Codex CLI Found"
-                    } else {
-                        "✗  ERR Install Codex CLI, then run check again."
-                    },
-                    if state.setup.provider_checked && state.provider_diagnostics.command == "Found"
-                    {
-                        palette.success()
-                    } else {
-                        palette.warning()
-                    },
-                ),
-            ]),
-            area,
-        ),
+        SetupStep::Provider => render_provider_choices(frame, area, state, palette),
 
         SetupStep::Theme => {
             let mut theme_lines = vec![Line::styled("Colour themes", palette.accent().bold())];
@@ -392,6 +334,118 @@ fn render_setup_choices(frame: &mut Frame, area: Rect, state: &AppState, palette
             area,
         ),
     }
+}
+
+fn render_provider_choices(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
+    let rows = vec![
+        provider_row(
+            "1",
+            "Codex CLI",
+            provider_status(state),
+            state.setup.provider_index == 0,
+            palette,
+            area.width,
+        ),
+        provider_row(
+            "2",
+            "Claude Code",
+            "planned",
+            state.setup.provider_index == 1,
+            palette,
+            area.width,
+        ),
+        provider_row(
+            "3",
+            "Custom OpenAI-compatible",
+            "planned",
+            state.setup.provider_index == 2,
+            palette,
+            area.width,
+        ),
+        Line::raw(""),
+        Line::styled(
+            if state.setup.provider_checked && state.provider_diagnostics.command == "Found" {
+                "Enter again to continue"
+            } else {
+                "Press Enter to run provider check"
+            },
+            if state.setup.provider_checked && state.provider_diagnostics.command == "Found" {
+                palette.success()
+            } else {
+                palette.warning()
+            },
+        ),
+    ];
+    frame.render_widget(Paragraph::new(rows), area);
+}
+
+fn provider_status(state: &AppState) -> String {
+    if !state.setup.provider_checked {
+        return "press Enter to check".to_string();
+    }
+    if state.provider_diagnostics.command == "Found" {
+        format!("Found · {}", state.provider_diagnostics.version)
+    } else {
+        format!("Missing · {}", state.provider_diagnostics.auth_status)
+    }
+}
+
+fn provider_row(
+    index: &'static str,
+    label: &'static str,
+    status: impl ToString,
+    selected: bool,
+    palette: ThemePalette,
+    width: u16,
+) -> Line<'static> {
+    let status = truncate_width(
+        &status.to_string(),
+        (width as usize).saturating_sub(34).max(10),
+    );
+    let left = format!("{index}  {label}");
+    let gap = (width as usize)
+        .saturating_sub(
+            UnicodeWidthStr::width(left.as_str()) + UnicodeWidthStr::width(status.as_str()),
+        )
+        .max(2);
+    Line::from(vec![
+        Span::styled(
+            if selected { "› " } else { "  " },
+            if selected {
+                palette.accent().bold()
+            } else {
+                palette.dim()
+            },
+        ),
+        Span::styled(
+            left,
+            if selected {
+                palette.text().bold()
+            } else {
+                palette.text()
+            },
+        ),
+        Span::raw(" ".repeat(gap)),
+        Span::styled(status, palette.dim()),
+    ])
+}
+
+fn truncate_width(value: &str, max: usize) -> String {
+    if UnicodeWidthStr::width(value) <= max {
+        return value.to_string();
+    }
+    let mut out = String::new();
+    let mut width = 0;
+    for ch in value.chars() {
+        let ch_width = UnicodeWidthStr::width(ch.to_string().as_str());
+        if width + ch_width + 3 > max {
+            break;
+        }
+        out.push(ch);
+        width += ch_width;
+    }
+    out.push_str("...");
+    out
 }
 
 // ── Footer ────────────────────────────────────────────────────────────────

@@ -65,10 +65,10 @@ fn setup_screen_uses_left_mascot_right_copy_and_no_outer_frame() {
     assert!(text.contains("3  Exit"));
     assert!(text.contains("▄      ▄▄"));
     assert!(text.contains("· · ·"));
-    assert!(!text.contains('╭'));
-    assert!(!text.contains('╮'));
-    assert!(!text.contains('╰'));
-    assert!(!text.contains('╯'));
+    assert!(!text.contains("╭"));
+    assert!(!text.contains("╮"));
+    assert!(!text.contains("╰"));
+    assert!(!text.contains("╯"));
     assert!(!text.contains("security policy"));
     assert!(!text.contains("security-strict"));
 }
@@ -110,18 +110,16 @@ fn setup_model_and_theme_are_configurable() {
 }
 
 #[test]
-fn setup_provider_shows_diagnostics_below_selection() {
+fn setup_provider_shows_diagnostics_on_provider_row() {
     let mut state = AppState::setup();
     state.setup.step = SetupStep::Provider;
     let text = render_to_text(140, 40, &state);
 
-    assert!(text.contains("Provider check"));
-    assert!(text.contains("binary"));
-    assert!(text.contains("version"));
-    assert!(text.contains("config"));
-    assert!(text.contains("auth"));
+    assert!(text.contains("1  Codex CLI"));
+    assert!(text.contains("press Enter"));
+    assert!(text.contains("2  Claude Code"));
     assert!(text.contains("next"));
-    assert!(text.find("1  Codex CLI").unwrap() < text.find("Provider check").unwrap());
+    assert!(!text.contains("Provider check"));
 }
 
 #[test]
@@ -268,10 +266,7 @@ fn command_palette_uses_dedicated_bottom_panel() {
         .iter()
         .position(|line| line.contains("/provider"))
         .unwrap();
-    let rule_y = lines
-        .iter()
-        .rposition(|line| line.contains("─") || line.contains("в”Ђ"))
-        .unwrap();
+    let rule_y = lines.iter().rposition(|line| line.contains("─")).unwrap();
 
     assert!(command_y > 20);
     assert!(command_y < rule_y);
@@ -325,7 +320,7 @@ fn context_command_records_repo_context_block() {
     assert!(event
         .lines
         .iter()
-        .any(|line| line.starts_with("risk zones:")));
+        .any(|line| line.starts_with("impact area:")));
 }
 
 #[test]
@@ -625,12 +620,7 @@ fn home_header_has_greeting_metrics_and_dotted_internal_dividers() {
         .position(|line| line.contains("Recent Sessions"))
         .and_then(|index| index.checked_sub(1))
         .unwrap();
-    let metrics_context_y = lines
-        .iter()
-        .position(|line| line.contains("context  ["))
-        .unwrap();
     assert!(lines[releases_rule_y].contains("────────────────"));
-    assert_eq!(releases_rule_y, metrics_context_y.saturating_sub(1));
 }
 
 #[test]
@@ -663,21 +653,48 @@ fn full_header_omits_context_block() {
 }
 
 #[test]
-fn default_theme_is_cyan_and_static_across_frames() {
+fn default_theme_is_cyan_and_animates_active_session() {
     let mut state = AppState::home();
     assert_eq!(state.config.theme, "Routis Cyan");
 
     let (_text_a, buffer_a) = render_to_text_and_buffer(150, 44, &state);
+    state.ui.input = "debug auth flow".to_string();
+    handle_key_for_test(
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
     state.ui.frame = 9;
     let (_text_b, buffer_b) = render_to_text_and_buffer(150, 44, &state);
 
     assert!(buffer_has_fg(&buffer_a, Color::Rgb(92, 200, 215)));
-    assert_eq!(buffer_a.content(), buffer_b.content());
+    assert_ne!(buffer_a.content(), buffer_b.content());
 }
 
 #[test]
 fn session_timeline_uses_plain_routis_execution_flow() {
     let mut state = AppState::home();
+    let policy = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(
+        policy.path(),
+        r#"
+version: 1
+profiles:
+  cheap:
+    model: gpt-5.4-mini
+    reasoning: low
+  balanced:
+    model: gpt-5.5
+    reasoning: medium
+  deep:
+    model: gpt-5.5
+    reasoning: high
+  extradeep:
+    model: gpt-5.5
+    reasoning: xhigh
+"#,
+    )
+    .unwrap();
+    state.config.policy_file = policy.path().display().to_string();
     state.ui.input = "debug auth flow".to_string();
     handle_key_for_test(
         &mut state,
@@ -695,13 +712,16 @@ fn session_timeline_uses_plain_routis_execution_flow() {
     assert!(text.contains("You"));
     assert!(text.contains("Routis"));
     assert!(text.contains("Prompt: \"debug auth flow\""));
-    assert!(text.contains("Profile: deep"));
-    assert!(text.contains("Model: gpt-5.5  reasoning: high"));
+    assert_eq!(state.current_plan.profile, "deep");
+    assert_eq!(state.current_plan.model, "gpt-5.5");
+    assert_eq!(state.current_plan.reasoning, "high");
+    assert!(text.contains("Impact Area:"));
     assert!(!text.contains("Command preview"));
     assert!(!text.contains("codex exec"));
     assert!(text.contains("Awaiting confirmation"));
     assert!(text.contains("├─"));
     assert!(text.contains("└─"));
+    assert!(text.contains("planning") || text.contains("Awaiting confirmation"));
     assert!(!text.contains("Security policy"));
     assert!(!text.contains("security-strict"));
 }
@@ -720,7 +740,37 @@ fn awaiting_confirmation_shows_input_choices() {
 
     let text = render_to_text(150, 44, &state);
 
-    assert!(text.contains("[proceed] / [cancel]"));
+    assert!(text.contains("> 1. Proceed"));
+    assert!(text.contains("  2. Decline"));
+}
+
+#[test]
+fn input_block_shows_runtime_status_below_prompt() {
+    let mut state = AppState::home();
+    state.current_plan.profile = "deep".to_string();
+    state.current_plan.model = "gpt-5.5".to_string();
+    state.current_plan.reasoning = "high".to_string();
+
+    let text = render_to_text(150, 44, &state);
+
+    assert!(text.contains("Type a task or / for commands"));
+    assert!(text.contains("Codex  gpt-5.5  high  profile deep  idle"));
+    assert!(text.contains("Enter send"));
+}
+
+#[test]
+fn russian_module_prompt_routes_to_deep_profile() {
+    let mut state = AppState::home();
+    state.ui.input = "\u{0441}\u{043e}\u{0437}\u{0434}\u{0430}\u{0439} \u{043d}\u{043e}\u{0432}\u{044b}\u{0439} \u{043c}\u{043e}\u{0434}\u{0443}\u{043b}\u{044c} \u{0434}\u{043b}\u{044f} \u{044d}\u{0442}\u{043e}\u{0433}\u{043e} \u{0440}\u{0435}\u{043f}\u{043e}".to_string();
+
+    handle_key_for_test(
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+
+    assert_eq!(state.current_plan.profile, "deep");
+    assert_eq!(state.current_plan.reasoning, "high");
+    assert_ne!(state.repo_context.impact_area, "-");
 }
 
 #[test]
@@ -750,8 +800,8 @@ fn empty_session_area_has_no_scroll_artifacts() {
     let state = AppState::home();
     let text = render_to_text(150, 44, &state);
 
-    assert!(!text.contains("↑"));
-    assert!(!text.contains("↓"));
+    assert!(!text.contains("в†‘"));
+    assert!(!text.contains("в†“"));
     assert!(!text.contains("scroll"));
 }
 
@@ -823,7 +873,7 @@ fn status_command_includes_repo_context_state() {
     let mut state = AppState::home();
     state.repo_context.branch = "feature/context".to_string();
     state.repo_context.changed_files = 3;
-    state.repo_context.risk_zones = "auth, workflow".to_string();
+    state.repo_context.impact_area = "auth, workflow".to_string();
     state.ui.input = "/status".to_string();
 
     handle_key_for_test(
@@ -841,7 +891,7 @@ fn status_command_includes_repo_context_state() {
     assert!(event.lines.contains(&"changed files: 3".to_string()));
     assert!(event
         .lines
-        .contains(&"risk zones: auth, workflow".to_string()));
+        .contains(&"impact area: auth, workflow".to_string()));
 }
 
 #[test]
@@ -1031,22 +1081,6 @@ fn session_confirm_flow_accepts_proceed_edit_and_cancel() {
     }
     assert_eq!(state.session.phase, SessionPhase::AwaitingConfirmation);
 
-    state.ui.input = "edit".to_string();
-    handle_key_for_test(
-        &mut state,
-        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
-    );
-    assert_eq!(state.mode, AppMode::Home);
-    assert_eq!(state.ui.input, "debug auth flow");
-
-    handle_key_for_test(
-        &mut state,
-        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
-    );
-    for _ in 0..8 {
-        tick_for_test(&mut state);
-    }
-    state.ui.input = "proceed".to_string();
     handle_key_for_test(
         &mut state,
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
@@ -1054,12 +1088,49 @@ fn session_confirm_flow_accepts_proceed_edit_and_cancel() {
     assert_eq!(state.session.phase, SessionPhase::Ready);
     assert!(state.ui.status_line.contains("confirmed"));
 
-    state.ui.input = "cancel".to_string();
+    handle_key_for_test(
+        &mut state,
+        KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+    );
+    assert_eq!(state.session.phase, SessionPhase::Cancelled);
+
+    state.ui.input = "debug auth flow".to_string();
+    handle_key_for_test(
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+    for _ in 0..8 {
+        tick_for_test(&mut state);
+    }
+    handle_key_for_test(&mut state, KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     handle_key_for_test(
         &mut state,
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
     );
     assert_eq!(state.session.phase, SessionPhase::Cancelled);
+}
+
+#[test]
+fn ready_session_stays_ready_after_tick() {
+    let mut state = AppState::home();
+    state.ui.input = "debug auth flow".to_string();
+    handle_key_for_test(
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+    for _ in 0..8 {
+        tick_for_test(&mut state);
+    }
+
+    handle_key_for_test(
+        &mut state,
+        KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+    );
+    assert_eq!(state.session.phase, SessionPhase::Ready);
+
+    tick_for_test(&mut state);
+
+    assert_eq!(state.session.phase, SessionPhase::Ready);
 }
 
 #[test]

@@ -29,6 +29,8 @@ pub enum PolicyError {
         profile: String,
         field: &'static str,
     },
+    #[error("policy rule #{index} must define `if_risk_zone` or `if_path`")]
+    EmptyRuleMatcher { index: usize },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -79,6 +81,12 @@ impl PolicyFile {
     pub fn validate(&self) -> Result<(), PolicyError> {
         if self.version != 1 {
             return Err(PolicyError::UnsupportedVersion(self.version));
+        }
+
+        for (index, rule) in self.rules.iter().enumerate() {
+            if rule.if_risk_zone.is_none() && rule.if_path.is_none() {
+                return Err(PolicyError::EmptyRuleMatcher { index: index + 1 });
+            }
         }
 
         for profile in [
@@ -164,9 +172,17 @@ fn policy_rule_matches(
         .if_risk_zone
         .is_none_or(|zone| risk_zones.contains(&zone));
     let path_matches = rule.if_path.as_ref().is_none_or(|pattern| {
-        changed_files
-            .iter()
-            .any(|path| normalize_path(path).contains(&normalize_pattern(pattern)))
+        let pattern = normalize_pattern(pattern);
+        if rule.max_profile.is_some() && rule.min_profile.is_none() {
+            !changed_files.is_empty()
+                && changed_files
+                    .iter()
+                    .all(|path| normalize_path(path).contains(&pattern))
+        } else {
+            changed_files
+                .iter()
+                .any(|path| normalize_path(path).contains(&pattern))
+        }
     });
     risk_matches && path_matches
 }
@@ -350,5 +366,20 @@ profiles:
 "#;
         let err = PolicyFile::parse_yaml(raw, "broken.yaml").unwrap_err();
         assert!(matches!(err, PolicyError::Parse { .. }));
+    }
+
+    #[test]
+    fn rejects_rule_without_matcher() {
+        let raw = format!(
+            r#"
+{POLICY}
+rules:
+  - min_profile: deep
+"#
+        );
+
+        let err = PolicyFile::parse_yaml(&raw, "broken.yaml").unwrap_err();
+
+        assert!(matches!(err, PolicyError::EmptyRuleMatcher { index: 1 }));
     }
 }

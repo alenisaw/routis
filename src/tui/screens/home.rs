@@ -183,8 +183,16 @@ fn render_model_metrics(frame: &mut Frame, area: Rect, state: &AppState, palette
             area.width,
             palette,
         ),
-        kv_line_width("model", &state.config.model, area.width, palette),
-        kv_line_width("reason", &state.config.reasoning, area.width, palette),
+        kv_line_width("profile", &state.current_plan.profile, area.width, palette),
+        kv_line_width("model", &state.current_plan.model, area.width, palette),
+        kv_line_width("reason", &state.current_plan.reasoning, area.width, palette),
+        kv_line_width("branch", &state.repo_context.branch, area.width, palette),
+        kv_line_width(
+            "impact",
+            &state.repo_context.impact_area,
+            area.width,
+            palette,
+        ),
         section_rule(area.width, palette),
     ];
 

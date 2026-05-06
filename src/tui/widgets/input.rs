@@ -1,5 +1,5 @@
 use crate::tui::{
-    state::{AppState, SessionPhase},
+    state::{AppState, ConfirmationChoice, SessionPhase},
     theme::ThemePalette,
 };
 use ratatui::{
@@ -11,19 +11,36 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 pub fn render_input(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
-    let awaiting_confirmation =
-        state.session.phase == SessionPhase::AwaitingConfirmation && state.ui.input.is_empty();
-    let raw = if awaiting_confirmation {
-        "[proceed] / [cancel]".to_string()
-    } else if state.ui.input.is_empty() {
+    if state.session.phase == SessionPhase::AwaitingConfirmation && state.ui.input.is_empty() {
+        let lines = ConfirmationChoice::ALL
+            .iter()
+            .enumerate()
+            .map(|(index, choice)| {
+                let selected = state.ui.confirmation_index == index;
+                let marker = if selected { ">" } else { " " };
+                let raw = format!("{marker} {}. {}", index + 1, choice.label());
+                let style = if selected {
+                    palette.warning().bold()
+                } else {
+                    palette.text()
+                };
+                Line::from(vec![Span::styled(
+                    clip_to_width(&raw, area.width as usize),
+                    style,
+                )])
+            })
+            .collect::<Vec<_>>();
+        frame.render_widget(Paragraph::new(lines), area);
+        return;
+    }
+
+    let raw = if state.ui.input.is_empty() {
         "Type a task or / for commands...".to_string()
     } else {
         state.ui.input.clone()
     };
     let value = clip_to_width(&raw, area.width as usize);
-    let value_style = if awaiting_confirmation {
-        palette.warning().bold()
-    } else if state.ui.input.is_empty() {
+    let value_style = if state.ui.input.is_empty() {
         palette.dim()
     } else {
         palette.text()
