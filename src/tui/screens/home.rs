@@ -1,6 +1,7 @@
 use crate::tui::{
     history::recent_sessions,
     state::{AppState, LayoutMode},
+    symbols,
     theme::ThemePalette,
     widgets::{
         dividers::render_vertical_dots,
@@ -161,40 +162,7 @@ fn render_updates_commands(frame: &mut Frame, area: Rect, palette: ThemePalette)
 }
 
 fn render_model_metrics(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
-    if area.height <= 3 {
-        let lines = vec![
-            Line::styled("Metrics", palette.section_title()),
-            kv_line_width(
-                "provider",
-                provider_label(&state.config.provider),
-                area.width,
-                palette,
-            ),
-        ];
-        frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), area);
-        return;
-    }
-
-    let mut lines = vec![
-        Line::styled("Metrics", palette.section_title()),
-        kv_line_width(
-            "provider",
-            provider_label(&state.config.provider),
-            area.width,
-            palette,
-        ),
-        kv_line_width("profile", &state.current_plan.profile, area.width, palette),
-        kv_line_width("model", &state.current_plan.model, area.width, palette),
-        kv_line_width("reason", &state.current_plan.reasoning, area.width, palette),
-        kv_line_width("branch", &state.repo_context.branch, area.width, palette),
-        kv_line_width(
-            "impact",
-            &state.repo_context.impact_area,
-            area.width,
-            palette,
-        ),
-        section_rule(area.width, palette),
-    ];
+    let mut lines = vec![Line::styled("Metrics", palette.section_title())];
 
     let metrics = if area.height <= 10 {
         metric_lines_compact(&state.metrics, palette, area.width)
@@ -202,6 +170,11 @@ fn render_model_metrics(frame: &mut Frame, area: Rect, state: &AppState, palette
         metric_lines(&state.metrics, palette, area.width)
     };
     lines.extend(metrics);
+    if area.height > 8 {
+        lines.push(section_rule(area.width, palette));
+        lines.push(kv_line_width("today", "0 tasks", area.width, palette));
+        lines.push(kv_line_width("sessions", "2 shown", area.width, palette));
+    }
     frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), area);
 }
 
@@ -315,16 +288,8 @@ fn value_width(width: u16) -> usize {
     (width as usize).saturating_sub(10).max(8)
 }
 
-fn provider_label(value: &str) -> &str {
-    match value {
-        "Codex CLI" => "Codex",
-        "Claude Code" => "Claude",
-        other => other,
-    }
-}
-
 fn section_rule(width: u16, palette: ThemePalette) -> Line<'static> {
-    let line = "─".repeat(width as usize);
+    let line = symbols::H.repeat(width as usize);
     Line::styled(line, palette.border())
 }
 

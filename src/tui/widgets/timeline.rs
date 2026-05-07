@@ -27,6 +27,7 @@ pub fn render_timeline(frame: &mut Frame, area: Rect, state: &AppState, palette:
                     role_prefix(&event.source),
                     role_style(&event.source, palette).bold(),
                 ),
+                Span::raw(" "),
                 Span::styled(
                     format!("{:<10}", &event.source),
                     role_style(&event.source, palette).bold(),
@@ -115,7 +116,7 @@ fn detail_style(line: &str, palette: ThemePalette) -> Style {
         palette.error()
     } else if line.starts_with("Prompt:") {
         palette.cyan().italic()
-    } else if line.contains("Impact Area") {
+    } else if line.contains("Area:") {
         palette.accent().bold()
     } else if line.contains("checked") || line.contains("resolved") || line.contains("Found") {
         palette.success()

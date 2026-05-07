@@ -105,8 +105,8 @@ fn setup_model_and_theme_are_configurable() {
 
     assert_eq!(state.config.theme, "Neon Magenta");
     assert!(text.contains("Preview: Neon Magenta"));
-    assert!(buffer_has_fg(&buffer, Color::Rgb(244, 114, 182)));
-    assert!(buffer_has_bg(&buffer, Color::Rgb(157, 23, 77)));
+    assert!(buffer_has_fg(&buffer, Color::Rgb(210, 104, 158)));
+    assert!(buffer_has_bg(&buffer, Color::Rgb(82, 28, 52)));
 }
 
 #[test]
@@ -118,7 +118,8 @@ fn setup_provider_shows_diagnostics_on_provider_row() {
     assert!(text.contains("1  Codex CLI"));
     assert!(text.contains("press Enter"));
     assert!(text.contains("2  Claude Code"));
-    assert!(text.contains("next"));
+    assert!(text.contains("Claude Code"));
+    assert!(!text.contains("[Tab]"));
     assert!(!text.contains("Provider check"));
 }
 
@@ -288,6 +289,7 @@ fn command_selected_from_palette_is_saved_to_history() {
     );
 
     assert_eq!(history.entries(), &["/status"]);
+    assert!(!state.ui.command_palette_open);
     assert!(state
         .session
         .events
@@ -317,10 +319,7 @@ fn context_command_records_repo_context_block() {
         .lines
         .iter()
         .any(|line| line.starts_with("changed files:")));
-    assert!(event
-        .lines
-        .iter()
-        .any(|line| line.starts_with("impact area:")));
+    assert!(event.lines.iter().any(|line| line.starts_with("area:")));
 }
 
 #[test]
@@ -596,17 +595,17 @@ fn home_header_has_greeting_metrics_and_dotted_internal_dividers() {
     assert!(text.contains("context"));
     assert!(text.contains("input"));
     assert!(text.contains("output"));
-    assert!(text.contains("total"));
     assert!(text.contains("saved"));
     assert!(text.contains("context  "));
     assert!(text.contains("input    "));
     assert!(text.contains("output   "));
-    assert!(text.contains("total    "));
     assert!(text.contains("Recent Sessions"));
     assert!(!text.contains("CHANGELOG"));
     assert!(!text.contains("more"));
-    assert!(text.contains("provider"));
-    assert!(!text.contains("tasks    "));
+    assert!(!text.contains("profile  "));
+    assert!(text.contains("today"));
+    assert!(text.contains("sessions"));
+    assert!(text.contains("0 tasks"));
     assert!(text.contains("┊"));
     assert!(!text.contains("Context"));
     assert!(!text.contains("cwd      "));
@@ -666,7 +665,7 @@ fn default_theme_is_cyan_and_animates_active_session() {
     state.ui.frame = 9;
     let (_text_b, buffer_b) = render_to_text_and_buffer(150, 44, &state);
 
-    assert!(buffer_has_fg(&buffer_a, Color::Rgb(92, 200, 215)));
+    assert!(buffer_has_fg(&buffer_a, Color::Rgb(82, 174, 188)));
     assert_ne!(buffer_a.content(), buffer_b.content());
 }
 
@@ -715,7 +714,7 @@ profiles:
     assert_eq!(state.current_plan.profile, "deep");
     assert_eq!(state.current_plan.model, "gpt-5.5");
     assert_eq!(state.current_plan.reasoning, "high");
-    assert!(text.contains("Impact Area:"));
+    assert!(text.contains("Area:"));
     assert!(!text.contains("Command preview"));
     assert!(!text.contains("codex exec"));
     assert!(text.contains("Awaiting confirmation"));
@@ -756,7 +755,7 @@ fn input_block_shows_runtime_status_below_prompt() {
     assert!(text.contains("Type a task or / for commands"));
     assert!(text.contains("Codex"));
     assert!(text.contains("gpt-5.5"));
-    assert!(text.contains("profile deep"));
+    assert!(text.contains("branch"));
     assert!(text.contains("idle"));
     assert!(text.contains("Enter send"));
 }
@@ -890,9 +889,7 @@ fn status_command_includes_repo_context_state() {
         .unwrap();
     assert!(event.lines.contains(&"branch: feature/context".to_string()));
     assert!(event.lines.contains(&"changed files: 3".to_string()));
-    assert!(event
-        .lines
-        .contains(&"impact area: auth, workflow".to_string()));
+    assert!(event.lines.contains(&"area: auth, workflow".to_string()));
 }
 
 #[test]
@@ -1145,7 +1142,7 @@ fn home_header_inherits_configured_theme_palette() {
 
     let (_text, buffer) = render_to_text_and_buffer(150, 44, &state);
 
-    assert!(buffer_has_fg(&buffer, Color::Rgb(96, 165, 250)));
+    assert!(buffer_has_fg(&buffer, Color::Rgb(92, 145, 218)));
 }
 
 #[test]

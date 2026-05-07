@@ -2,6 +2,7 @@ use crate::tui::{
     config::default_config_path,
     screens::home::{kv_line, sep_line, workspace_label},
     state::{AppState, SetupStep, THEME_MAX},
+    symbols,
     theme::ThemePalette,
     widgets::{dividers::h_rule, mascot::mascot_render_lines},
     APP_VERSION,
@@ -77,14 +78,17 @@ fn render_step_indicator(frame: &mut Frame, area: Rect, state: &AppState, palett
             } else {
                 palette.dim()
             };
-            spans.push(Span::styled("  ──  ", connector_style));
+            spans.push(Span::styled(
+                format!("  {}{}  ", symbols::H, symbols::H),
+                connector_style,
+            ));
         }
         let (dot, style) = if i < current {
-            ("✓", palette.success().bold())
+            ("+", palette.success().bold())
         } else if i == current {
-            ("●", palette.accent().bold())
+            ("*", palette.accent().bold())
         } else {
-            ("○", palette.dim())
+            ("o", palette.dim())
         };
         spans.push(Span::styled(format!("{dot} {}", step.label()), style));
     }
@@ -173,7 +177,7 @@ fn step_copy(step: SetupStep) -> (&'static str, [&'static str; 2]) {
             "Your Name",
             [
                 "Set the display name used in prompts and status lines.",
-                "Stored locally on this machine — editable any time.",
+                "Stored locally on this machine; editable any time.",
             ],
         ),
         SetupStep::Provider => (
@@ -204,11 +208,11 @@ fn step_list_line<'a>(step: SetupStep, current: SetupStep, palette: ThemePalette
     let idx = step.index();
     let cur = current.index();
     let (dot, label_style, value_style) = if idx < cur {
-        ("✓", palette.success(), palette.muted())
+        ("+", palette.success(), palette.muted())
     } else if idx == cur {
-        ("●", palette.accent().bold(), palette.text())
+        ("*", palette.accent().bold(), palette.text())
     } else {
-        ("○", palette.dim(), palette.dim())
+        ("o", palette.dim(), palette.dim())
     };
 
     Line::from(vec![
@@ -221,7 +225,7 @@ fn step_hint(step: SetupStep) -> &'static str {
     match step {
         SetupStep::Welcome => "start or import config",
         SetupStep::Name => "local display name",
-        SetupStep::Provider => "Codex CLI · Claude Code",
+        SetupStep::Provider => "Codex CLI / Claude Code",
         SetupStep::Theme => "5 palettes, live preview",
         SetupStep::Finish => "write config and launch",
     }
@@ -364,16 +368,8 @@ fn render_provider_choices(frame: &mut Frame, area: Rect, state: &AppState, pale
         ),
         Line::raw(""),
         Line::styled(
-            if state.setup.provider_checked && state.provider_diagnostics.command == "Found" {
-                "Enter again to continue"
-            } else {
-                "Press Enter to run provider check"
-            },
-            if state.setup.provider_checked && state.provider_diagnostics.command == "Found" {
-                palette.success()
-            } else {
-                palette.warning()
-            },
+            "Enter checks selected provider; arrows switch rows",
+            palette.muted(),
         ),
     ];
     frame.render_widget(Paragraph::new(rows), area);
@@ -384,9 +380,9 @@ fn provider_status(state: &AppState) -> String {
         return "press Enter to check".to_string();
     }
     if state.provider_diagnostics.command == "Found" {
-        format!("Found · {}", state.provider_diagnostics.version)
+        format!("Found / {}", state.provider_diagnostics.version)
     } else {
-        format!("Missing · {}", state.provider_diagnostics.auth_status)
+        format!("Missing / {}", state.provider_diagnostics.auth_status)
     }
 }
 
@@ -410,7 +406,7 @@ fn provider_row(
         .max(2);
     Line::from(vec![
         Span::styled(
-            if selected { "› " } else { "  " },
+            if selected { "> " } else { "  " },
             if selected {
                 palette.accent().bold()
             } else {
@@ -452,9 +448,9 @@ fn truncate_width(value: &str, max: usize) -> String {
 
 fn render_setup_footer(frame: &mut Frame, area: Rect, palette: ThemePalette) {
     const KEYS: &[(&str, &str)] = &[
-        ("[↑↓]", "move"),
+        ("[up/down]", "move"),
         ("[1-5]", "pick"),
-        ("[Tab]", "next step"),
+        ("[left/right]", "step"),
         ("[Enter]", "confirm"),
         ("[Esc]", "back"),
     ];

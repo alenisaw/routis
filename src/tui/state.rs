@@ -423,10 +423,9 @@ impl AppState {
                 lines: vec![
                     format!("Prompt: \"{task}\""),
                     format!("Provider: {}", self.config.provider),
-                    format!("Profile: {}", plan.profile),
-                    format!("Model: {}  reasoning: {}", plan.model, plan.reasoning),
+                    format!("Model & reason: {} / {}", plan.model, plan.reasoning),
                     format!("Repo: {} changed files", plan.changed_files),
-                    format!("Impact Area: {}", plan.impact_area),
+                    format!("Area: {}", plan.impact_area),
                     format!("Policy: {}", plan.policy_source),
                     format!("Reason: {}", plan.reason),
                 ],

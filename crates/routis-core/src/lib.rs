@@ -178,9 +178,9 @@ fn classify_task(task: &str) -> Classification {
             "update readme",
             "docs",
             "readme",
-            "опечат",
-            "ошибк",
-            "док",
+            "\u{043e}\u{043f}\u{0435}\u{0447}\u{0430}\u{0442}",
+            "\u{043e}\u{0448}\u{0438}\u{0431}\u{043a}",
+            "\u{0434}\u{043e}\u{043a}",
         ],
         0,
     );
@@ -198,12 +198,12 @@ fn classify_task(task: &str) -> Classification {
             "create",
             "new module",
             "module",
-            "добав",
-            "созда",
-            "сдела",
-            "модул",
-            "проверь",
-            "прочека",
+            "\u{0434}\u{043e}\u{0431}\u{0430}\u{0432}",
+            "\u{0441}\u{043e}\u{0437}\u{0434}\u{0430}",
+            "\u{0441}\u{0434}\u{0435}\u{043b}\u{0430}",
+            "\u{043c}\u{043e}\u{0434}\u{0443}\u{043b}",
+            "\u{043f}\u{0440}\u{043e}\u{0432}\u{0435}\u{0440}\u{044c}",
+            "\u{043f}\u{0440}\u{043e}\u{0447}\u{0435}\u{043a}\u{0430}",
         ],
         1,
     );
@@ -219,11 +219,11 @@ fn classify_task(task: &str) -> Classification {
             "migration",
             "edge case",
             "bug",
-            "почин",
-            "исправ",
-            "отлад",
-            "баг",
-            "ошибка",
+            "\u{043f}\u{043e}\u{0447}\u{0438}\u{043d}",
+            "\u{0438}\u{0441}\u{043f}\u{0440}\u{0430}\u{0432}",
+            "\u{043e}\u{0442}\u{043b}\u{0430}\u{0434}",
+            "\u{0431}\u{0430}\u{0433}",
+            "\u{043e}\u{0448}\u{0438}\u{0431}\u{043a}\u{0430}",
         ],
         2,
     );
@@ -239,10 +239,10 @@ fn classify_task(task: &str) -> Classification {
             "rewrite",
             "rework everything",
             "whole project",
-            "весь проект",
-            "весь реп",
-            "архитектур",
-            "перепиш",
+            "\u{0432}\u{0435}\u{0441}\u{044c} \u{043f}\u{0440}\u{043e}\u{0435}\u{043a}\u{0442}",
+            "\u{0432}\u{0435}\u{0441}\u{044c} \u{0440}\u{0435}\u{043f}",
+            "\u{0430}\u{0440}\u{0445}\u{0438}\u{0442}\u{0435}\u{043a}\u{0442}\u{0443}\u{0440}",
+            "\u{043f}\u{0435}\u{0440}\u{0435}\u{043f}\u{0438}\u{0448}",
         ],
         3,
     );
@@ -266,19 +266,27 @@ fn classify_task(task: &str) -> Classification {
             "whole repo",
             "this repo",
             "all files",
-            "весь проект",
-            "этот проект",
-            "весь реп",
-            "этот реп",
-            "везде",
-            "все файлы",
+            "\u{0432}\u{0435}\u{0441}\u{044c} \u{043f}\u{0440}\u{043e}\u{0435}\u{043a}\u{0442}",
+            "\u{044d}\u{0442}\u{043e}\u{0442} \u{043f}\u{0440}\u{043e}\u{0435}\u{043a}\u{0442}",
+            "\u{0432}\u{0435}\u{0441}\u{044c} \u{0440}\u{0435}\u{043f}",
+            "\u{044d}\u{0442}\u{043e}\u{0442} \u{0440}\u{0435}\u{043f}",
+            "\u{0432}\u{0435}\u{0437}\u{0434}\u{0435}",
+            "\u{0432}\u{0441}\u{0435} \u{0444}\u{0430}\u{0439}\u{043b}\u{044b}",
         ],
     ) {
         matched.push("up-modifier".to_string());
         resolved_score += 1;
     }
 
-    if normalized.contains("readme") && contains_any(&normalized, &["check", "прочекай", "проверь"])
+    if normalized.contains("readme")
+        && contains_any(
+            &normalized,
+            &[
+                "check",
+                "\u{043f}\u{0440}\u{043e}\u{0447}\u{0435}\u{043a}\u{0430}\u{0439}",
+                "\u{043f}\u{0440}\u{043e}\u{0432}\u{0435}\u{0440}\u{044c}",
+            ],
+        )
     {
         matched.push("readme-check".to_string());
         resolved_score = resolved_score.min(0);
@@ -287,16 +295,11 @@ fn classify_task(task: &str) -> Classification {
     if contains_any(
         &normalized,
         &[
-            "analyze repo",
-            "analyze repository",
-            "analyze the repo",
-            "analyze the repository",
-            "create module",
-            "new module",
-            "module for this repo",
-            "создай модуль",
-            "новый модуль",
-            "модуль для",
+            "analyze repo", "analyze repository", "analyze the repo", "analyze the repository",
+            "create module", "new module", "module for this repo",
+            "\u{0441}\u{043e}\u{0437}\u{0434}\u{0430}\u{0439} \u{043c}\u{043e}\u{0434}\u{0443}\u{043b}\u{044c}",
+            "\u{043d}\u{043e}\u{0432}\u{044b}\u{0439} \u{043c}\u{043e}\u{0434}\u{0443}\u{043b}\u{044c}",
+            "\u{043c}\u{043e}\u{0434}\u{0443}\u{043b}\u{044c} \u{0434}\u{043b}\u{044f}",
         ],
     ) {
         matched.push("module-scope".to_string());
@@ -319,7 +322,6 @@ fn classify_task(task: &str) -> Classification {
         signals_matched: matched,
     }
 }
-
 fn apply_signals(
     text: &str,
     matched: &mut Vec<String>,

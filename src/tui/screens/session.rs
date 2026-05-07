@@ -100,11 +100,11 @@ fn shell_area(area: Rect) -> Rect {
 
 fn dashboard_height(area: Rect) -> u16 {
     let desired = match area.width {
-        144.. => 19.min(area.height.saturating_sub(8)),
-        94..=143 => 12.min(area.height.saturating_sub(4)),
-        _ => 13.min(area.height.saturating_sub(4)),
+        144.. => 16.min(area.height.saturating_sub(8)),
+        94..=143 => 11.min(area.height.saturating_sub(4)),
+        _ => 12.min(area.height.saturating_sub(4)),
     };
-    desired.max(10).min(area.height.saturating_sub(7).max(10))
+    desired.max(9).min(area.height.saturating_sub(7).max(9))
 }
 
 fn input_block_height(state: &AppState) -> u16 {
@@ -143,19 +143,13 @@ fn render_top_rule(frame: &mut Frame, area: Rect, state: &AppState, palette: The
     if area.width == 0 || area.height == 0 {
         return;
     }
-    let label = " prompt ";
     let status = format!(" {} ", session_state_label(state.session.phase));
     let width = area.width as usize;
-    let used = label.chars().count() + status.chars().count();
-    let fill = width.saturating_sub(used);
-    let left_fill = fill / 2;
-    let right_fill = fill.saturating_sub(left_fill);
+    let fill = width.saturating_sub(status.chars().count());
 
     frame.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled(symbols::H.repeat(left_fill), palette.rail()),
-            Span::styled(label, palette.rail_glow()),
-            Span::styled(symbols::H.repeat(right_fill), palette.rail()),
+            Span::styled(symbols::H.repeat(fill), palette.rail()),
             Span::styled(status, session_status_style(state.session.phase, palette)),
         ])),
         area,
@@ -192,8 +186,8 @@ fn render_runtime_line(frame: &mut Frame, area: Rect, state: &AppState, palette:
             reasoning_style(&state.current_plan.reasoning, palette),
         ),
         separator(palette),
-        Span::styled("profile ", palette.dim()),
-        Span::styled(state.current_plan.profile.clone(), palette.accent().bold()),
+        Span::styled("branch ", palette.dim()),
+        Span::styled(state.repo_context.branch.clone(), palette.muted()),
         separator(palette),
     ];
 

@@ -56,7 +56,7 @@ pub const COMMANDS: [CommandSpec; 13] = [
     },
     CommandSpec {
         name: "/context",
-        description: "show repository branch, changed files, and Impact Area",
+        description: "show repository branch, changed files, and area",
         shortcut: "",
         command: SlashCommand::Context,
     },

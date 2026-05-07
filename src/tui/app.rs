@@ -373,11 +373,11 @@ fn handle_setup_key(state: &mut AppState, key: KeyEvent) {
             state.ui.status_line = "use /quit to exit Routis".to_string();
         }
         KeyCode::Enter => confirm_setup(state),
-        KeyCode::Tab | KeyCode::Right if state.setup.step == SetupStep::Provider => {
+        KeyCode::Right if state.setup.step == SetupStep::Provider => {
             confirm_setup(state);
         }
-        KeyCode::Tab | KeyCode::Right => state.setup.step = state.setup.step.next(),
-        KeyCode::BackTab | KeyCode::Left => state.setup.step = state.setup.step.previous(),
+        KeyCode::Right => state.setup.step = state.setup.step.next(),
+        KeyCode::Left => state.setup.step = state.setup.step.previous(),
         KeyCode::Up => setup_move_up(state),
         KeyCode::Down => setup_move_down(state),
         KeyCode::Char(' ') => setup_move_down(state),
@@ -556,7 +556,7 @@ fn apply_command(
                     format!("policy file: {}", state.config.policy_file),
                     format!("branch: {}", state.repo_context.branch),
                     format!("changed files: {}", state.repo_context.changed_files),
-                    format!("impact area: {}", state.repo_context.impact_area),
+                    format!("area: {}", state.repo_context.impact_area),
                     format!("mode: {:?}", state.mode),
                 ],
             );
@@ -636,7 +636,7 @@ fn apply_command(
                     let mut lines = vec![
                         format!("branch: {}", context.branch.as_deref().unwrap_or("-")),
                         format!("changed files: {}", context.changed_files.len()),
-                        format!("impact area: {impact_area}"),
+                        format!("area: {impact_area}"),
                     ];
                     lines.extend(
                         context
@@ -922,6 +922,9 @@ fn apply_palette_selection(state: &mut AppState, history: &mut ShellHistory) -> 
         return false;
     };
     history.push(command);
+    state.ui.command_palette_open = false;
+    state.ui.palette_mode = PaletteMode::Commands;
+    state.ui.command_palette_index = 0;
     apply_command(state, parse_slash_command(command), history);
     true
 }

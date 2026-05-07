@@ -1,7 +1,6 @@
 use ratatui::style::{Color, Style};
 
-/// Full terminal colour palette.  Every field is set for *every* theme —
-/// we no longer silently inherit defaults for dim/surface/text.
+/// Full terminal color palette. Every field is set for every theme.
 #[derive(Debug, Clone, Copy)]
 pub struct ThemePalette {
     pub accent: Color,
@@ -11,7 +10,6 @@ pub struct ThemePalette {
     pub muted: Color,
     pub dim: Color,
     pub surface: Color,
-    /// Slightly elevated surface — used for bordered panels, block backgrounds.
     pub surface_alt: Color,
     pub success: Color,
     pub cyan: Color,
@@ -27,98 +25,97 @@ pub struct ThemePalette {
 impl ThemePalette {
     #[must_use]
     pub fn from_theme(theme: &str) -> Self {
-        // ── Routis Cyan (default) ────────────────────────────────────────
         let mut p = Self {
-            accent: Color::Rgb(92, 200, 215),
-            accent_soft: Color::Rgb(58, 166, 182),
-            selected_bg: Color::Rgb(18, 58, 67),
-            text: Color::Rgb(224, 234, 238),
-            muted: Color::Rgb(148, 164, 172),
-            dim: Color::Rgb(76, 94, 102),
-            surface: Color::Rgb(10, 16, 19),
-            surface_alt: Color::Rgb(16, 26, 30),
-            success: Color::Rgb(117, 211, 154),
-            cyan: Color::Rgb(92, 200, 215),
-            warning: Color::Rgb(214, 179, 90),
-            error: Color::Rgb(224, 122, 122),
-            provider_codex: Color::Rgb(238, 242, 245),
-            provider_claude: Color::Rgb(214, 132, 92),
-            provider_qwen: Color::Rgb(136, 145, 255),
-            rail: Color::Rgb(58, 166, 182),
-            rail_glow: Color::Rgb(92, 200, 215),
+            accent: Color::Rgb(82, 174, 188),
+            accent_soft: Color::Rgb(54, 126, 138),
+            selected_bg: Color::Rgb(16, 50, 57),
+            text: Color::Rgb(220, 228, 231),
+            muted: Color::Rgb(139, 154, 162),
+            dim: Color::Rgb(70, 86, 94),
+            surface: Color::Rgb(9, 13, 15),
+            surface_alt: Color::Rgb(14, 22, 25),
+            success: Color::Rgb(112, 196, 145),
+            cyan: Color::Rgb(82, 174, 188),
+            warning: Color::Rgb(202, 168, 88),
+            error: Color::Rgb(210, 112, 112),
+            provider_codex: Color::Rgb(232, 236, 238),
+            provider_claude: Color::Rgb(204, 126, 82),
+            provider_qwen: Color::Rgb(124, 138, 220),
+            rail: Color::Rgb(48, 118, 130),
+            rail_glow: Color::Rgb(82, 174, 188),
         };
 
         match theme {
             "Midnight Blue" => {
-                p.accent = Color::Rgb(96, 165, 250);
-                p.accent_soft = Color::Rgb(37, 99, 235);
-                p.selected_bg = Color::Rgb(30, 64, 175);
-                p.text = Color::Rgb(219, 228, 245);
-                p.muted = Color::Rgb(140, 160, 195);
-                p.dim = Color::Rgb(66, 82, 112);
-                p.surface = Color::Rgb(8, 14, 28);
-                p.surface_alt = Color::Rgb(14, 22, 42);
-                p.cyan = Color::Rgb(125, 211, 252);
-                p.success = Color::Rgb(110, 210, 160);
-                p.warning = Color::Rgb(208, 172, 80);
-                p.error = Color::Rgb(220, 112, 112);
-                p.provider_qwen = Color::Rgb(150, 170, 255);
-                p.rail = Color::Rgb(59, 130, 246);
-                p.rail_glow = Color::Rgb(125, 211, 252);
+                p.accent = Color::Rgb(92, 145, 218);
+                p.accent_soft = Color::Rgb(52, 92, 152);
+                p.selected_bg = Color::Rgb(22, 48, 94);
+                p.text = Color::Rgb(218, 226, 240);
+                p.muted = Color::Rgb(136, 153, 184);
+                p.dim = Color::Rgb(64, 78, 104);
+                p.surface = Color::Rgb(8, 13, 23);
+                p.surface_alt = Color::Rgb(13, 21, 36);
+                p.cyan = Color::Rgb(104, 184, 214);
+                p.success = Color::Rgb(108, 196, 152);
+                p.warning = Color::Rgb(196, 163, 84);
+                p.error = Color::Rgb(210, 108, 108);
+                p.provider_qwen = Color::Rgb(132, 154, 230);
+                p.rail = Color::Rgb(52, 105, 172);
+                p.rail_glow = Color::Rgb(92, 145, 218);
             }
             "Routis Violet" => {
-                p.accent = Color::Rgb(167, 139, 250);
-                p.accent_soft = Color::Rgb(124, 58, 237);
-                p.selected_bg = Color::Rgb(59, 26, 120);
-                p.text = Color::Rgb(228, 220, 248);
-                p.muted = Color::Rgb(156, 140, 196);
-                p.dim = Color::Rgb(82, 70, 112);
-                p.surface = Color::Rgb(10, 8, 20);
-                p.surface_alt = Color::Rgb(18, 14, 34);
-                p.cyan = Color::Rgb(103, 232, 249);
-                p.success = Color::Rgb(120, 220, 160);
-                p.warning = Color::Rgb(212, 176, 88);
-                p.error = Color::Rgb(228, 120, 140);
-                p.provider_qwen = Color::Rgb(150, 150, 255);
-                p.rail = Color::Rgb(124, 58, 237);
-                p.rail_glow = Color::Rgb(167, 139, 250);
+                p.accent = Color::Rgb(146, 122, 214);
+                p.accent_soft = Color::Rgb(96, 72, 158);
+                p.selected_bg = Color::Rgb(44, 32, 82);
+                p.text = Color::Rgb(226, 220, 240);
+                p.muted = Color::Rgb(150, 138, 182);
+                p.dim = Color::Rgb(76, 66, 102);
+                p.surface = Color::Rgb(10, 9, 17);
+                p.surface_alt = Color::Rgb(17, 14, 29);
+                p.cyan = Color::Rgb(96, 188, 202);
+                p.success = Color::Rgb(116, 200, 152);
+                p.warning = Color::Rgb(202, 166, 88);
+                p.error = Color::Rgb(214, 116, 132);
+                p.provider_qwen = Color::Rgb(138, 142, 226);
+                p.rail = Color::Rgb(88, 72, 146);
+                p.rail_glow = Color::Rgb(146, 122, 214);
             }
             "Neon Magenta" => {
-                p.accent = Color::Rgb(244, 114, 182);
-                p.accent_soft = Color::Rgb(219, 39, 119);
-                p.selected_bg = Color::Rgb(157, 23, 77);
-                p.text = Color::Rgb(248, 224, 234);
-                p.muted = Color::Rgb(196, 148, 172);
-                p.dim = Color::Rgb(104, 68, 88);
-                p.surface = Color::Rgb(12, 8, 14);
-                p.surface_alt = Color::Rgb(22, 12, 20);
-                p.cyan = Color::Rgb(103, 232, 249);
-                p.success = Color::Rgb(120, 220, 155);
-                p.warning = Color::Rgb(218, 182, 88);
-                p.error = Color::Rgb(248, 112, 112);
-                p.provider_codex = Color::Rgb(246, 238, 244);
-                p.provider_qwen = Color::Rgb(156, 163, 255);
-                p.rail = Color::Rgb(190, 70, 138);
-                p.rail_glow = Color::Rgb(244, 114, 182);
+                p.accent = Color::Rgb(210, 104, 158);
+                p.accent_soft = Color::Rgb(156, 58, 106);
+                p.selected_bg = Color::Rgb(82, 28, 52);
+                p.text = Color::Rgb(238, 224, 230);
+                p.muted = Color::Rgb(176, 142, 160);
+                p.dim = Color::Rgb(92, 64, 78);
+                p.surface = Color::Rgb(12, 8, 13);
+                p.surface_alt = Color::Rgb(22, 13, 19);
+                p.cyan = Color::Rgb(98, 184, 198);
+                p.success = Color::Rgb(116, 196, 148);
+                p.warning = Color::Rgb(204, 168, 90);
+                p.error = Color::Rgb(222, 112, 112);
+                p.provider_codex = Color::Rgb(238, 232, 236);
+                p.provider_qwen = Color::Rgb(138, 146, 222);
+                p.rail = Color::Rgb(142, 58, 100);
+                p.rail_glow = Color::Rgb(210, 104, 158);
             }
             "Monochrome" => {
-                p.accent = Color::Rgb(229, 231, 235);
-                p.accent_soft = Color::Rgb(156, 163, 175);
-                p.selected_bg = Color::Rgb(58, 58, 58);
+                p.accent = Color::Rgb(206, 210, 216);
+                p.accent_soft = Color::Rgb(142, 148, 156);
+                p.selected_bg = Color::Rgb(48, 50, 54);
                 p.text = Color::Rgb(220, 222, 226);
-                p.muted = Color::Rgb(148, 152, 160);
-                p.dim = Color::Rgb(76, 78, 82);
+                p.muted = Color::Rgb(146, 150, 158);
+                p.dim = Color::Rgb(72, 76, 82);
                 p.surface = Color::Rgb(10, 10, 10);
                 p.surface_alt = Color::Rgb(18, 18, 18);
-                p.cyan = Color::Rgb(200, 204, 212);
-                p.success = Color::Rgb(200, 206, 212);
-                p.warning = Color::Rgb(172, 168, 164);
-                p.error = Color::Rgb(232, 230, 228);
-                p.provider_codex = Color::Rgb(235, 236, 238);
-                p.provider_claude = Color::Rgb(190, 184, 178);
-                p.provider_qwen = Color::Rgb(194, 198, 210);
-                p.rail = Color::Rgb(156, 163, 175);
-                p.rail_glow = Color::Rgb(229, 231, 235);
+                p.cyan = Color::Rgb(190, 196, 204);
+                p.success = Color::Rgb(190, 202, 196);
+                p.warning = Color::Rgb(174, 168, 156);
+                p.error = Color::Rgb(218, 210, 206);
+                p.provider_codex = Color::Rgb(232, 234, 236);
+                p.provider_claude = Color::Rgb(186, 174, 162);
+                p.provider_qwen = Color::Rgb(184, 190, 204);
+                p.rail = Color::Rgb(132, 136, 144);
+                p.rail_glow = Color::Rgb(206, 210, 216);
             }
             _ => {}
         }
@@ -193,12 +190,10 @@ impl ThemePalette {
     pub fn metric_total(self) -> Style {
         Style::default().fg(self.muted)
     }
-
     #[must_use]
     pub fn selected(self) -> Style {
         Style::default().fg(Color::White).bg(self.selected_bg)
     }
-
     #[must_use]
     pub fn provider(self, source: &str) -> Style {
         let color = if source.contains("Claude") {
@@ -212,9 +207,6 @@ impl ThemePalette {
         };
         Style::default().fg(color)
     }
-
-    // ── Phase badge styles (filled bg, contrasting fg) ──────────────────
-
     #[must_use]
     pub fn badge_running(self) -> Style {
         Style::default().fg(self.surface).bg(self.cyan).bold()
