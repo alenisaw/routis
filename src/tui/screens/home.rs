@@ -2,10 +2,7 @@ use crate::tui::{
     history::recent_sessions,
     state::{AppState, LayoutMode},
     theme::ThemePalette,
-    widgets::{
-        dividers::render_vertical_dots,
-        metrics::{metric_lines, metric_lines_compact},
-    },
+    widgets::dividers::render_vertical_dots,
 };
 use ratatui::{
     layout::{Constraint, Layout, Margin, Rect},
@@ -24,7 +21,7 @@ pub fn render_header(frame: &mut Frame, area: Rect, state: &AppState, palette: T
     }
 
     let content = area.inner(Margin {
-        horizontal: 1,
+        horizontal: 0,
         vertical: 0,
     });
 
@@ -45,11 +42,11 @@ fn render_wide(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePa
     ])
     .split(area);
 
-    render_profile(frame, inset_right(cols[0], 2), state, palette);
+    render_profile(frame, inset_x(cols[0], 1, 2), state, palette);
     render_separator(frame, cols[1], palette);
-    render_updates_commands(frame, inset_x(cols[2], 2, 2), palette);
+    render_updates_commands(frame, inset_x(cols[2], 0, 0), palette);
     render_separator(frame, cols[3], palette);
-    render_model_metrics(frame, inset_left(cols[4], 2), state, palette);
+    render_activity_tracker(frame, inset_x(cols[4], 2, 1), state, palette);
 }
 
 fn render_medium(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
@@ -67,11 +64,11 @@ fn render_medium(frame: &mut Frame, area: Rect, state: &AppState, palette: Theme
     ])
     .split(area);
 
-    render_profile(frame, inset_right(cols[0], 1), state, palette);
+    render_profile(frame, inset_x(cols[0], 1, 1), state, palette);
     render_separator(frame, cols[1], palette);
-    render_updates_commands(frame, inset_x(cols[2], 2, 1), palette);
+    render_updates_commands(frame, inset_x(cols[2], 0, 0), palette);
     render_separator(frame, cols[3], palette);
-    render_model_metrics(frame, inset_left(cols[4], 2), state, palette);
+    render_activity_tracker(frame, inset_x(cols[4], 2, 1), state, palette);
 }
 
 fn render_small(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
@@ -84,7 +81,7 @@ fn render_small(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemeP
 
     render_profile(frame, rows[0], state, palette);
     render_updates_commands(frame, rows[1], palette);
-    render_model_metrics(frame, rows[2], state, palette);
+    render_activity_tracker(frame, rows[2], state, palette);
 }
 
 fn render_separator(frame: &mut Frame, area: Rect, palette: ThemePalette) {
@@ -147,50 +144,55 @@ fn render_profile(frame: &mut Frame, area: Rect, state: &AppState, palette: Them
 
 fn render_updates_commands(frame: &mut Frame, area: Rect, palette: ThemePalette) {
     let chunks = header_sections(area);
+    let inner_top = inset_x(chunks[0], 3, 2);
     let releases = vec![
         Line::styled("Releases", palette.section_title()),
-        bullet(release_notes()[0], area.width, palette),
-        bullet(release_notes()[1], area.width, palette),
+        bullet(release_notes()[0], inner_top.width, palette),
+        bullet(release_notes()[1], inner_top.width, palette),
     ];
     frame.render_widget(
         Paragraph::new(releases).wrap(Wrap { trim: false }),
-        chunks[0],
+        inner_top,
     );
     frame.render_widget(Paragraph::new(dotted_rule(area.width, palette)), chunks[1]);
 
+    let inner_bottom = inset_x(chunks[2], 3, 2);
     let mut lines = vec![Line::styled("Recent Sessions", palette.section_title())];
     let recent = recent_sessions(2);
     if recent.is_empty() {
         lines.push(Line::styled("no local sessions yet", palette.muted()));
     } else {
         for (index, (task, when)) in recent.into_iter().enumerate() {
-            lines.push(recent_line(&task, &when, area.width, index == 0, palette));
+            lines.push(recent_line(
+                &task,
+                &when,
+                inner_bottom.width,
+                index == 0,
+                palette,
+            ));
         }
     }
 
-    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), chunks[2]);
+    frame.render_widget(
+        Paragraph::new(lines).wrap(Wrap { trim: false }),
+        inner_bottom,
+    );
 }
 
-fn render_model_metrics(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
-    let chunks = header_sections(area);
-    let mut lines = vec![Line::styled("Metrics", palette.section_title())];
-
-    let metrics = if chunks[0].height <= 5 {
-        metric_lines_compact(&state.metrics, palette, area.width)
-    } else {
-        metric_lines(&state.metrics, palette, area.width)
-    };
-    lines.extend(metrics);
-    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), chunks[0]);
-    frame.render_widget(Paragraph::new(dotted_rule(area.width, palette)), chunks[1]);
-    let counters = vec![
-        kv_line_width("today", "0 tasks", area.width, palette),
+fn render_activity_tracker(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
+    let lines = vec![
+        Line::styled("Activity Tracker", palette.section_title()),
+        kv_line_width("tasks", state.metrics.tasks, area.width, palette),
         kv_line_width("sessions", "2 shown", area.width, palette),
+        kv_line_width("today", "0 done", area.width, palette),
+        kv_line_width(
+            "saved",
+            format!("{}%", state.metrics.saved_percent),
+            area.width,
+            palette,
+        ),
     ];
-    frame.render_widget(
-        Paragraph::new(counters).wrap(Wrap { trim: false }),
-        chunks[2],
-    );
+    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), area);
 }
 
 fn header_sections(area: Rect) -> std::rc::Rc<[Rect]> {
@@ -337,14 +339,6 @@ fn centered_workspace_line(width: u16, palette: ThemePalette) -> Line<'static> {
         Span::styled(label, palette.muted()),
         Span::styled(path, palette.path()),
     ])
-}
-
-fn inset_left(area: Rect, left: u16) -> Rect {
-    inset_x(area, left, 0)
-}
-
-fn inset_right(area: Rect, right: u16) -> Rect {
-    inset_x(area, 0, right)
 }
 
 fn inset_x(area: Rect, left: u16, right: u16) -> Rect {

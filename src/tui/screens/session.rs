@@ -191,10 +191,14 @@ fn render_runtime_line(frame: &mut Frame, area: Rect, state: &AppState, palette:
         Span::styled(state.repo_context.branch.clone(), palette.muted()),
     ];
     let right_text = format!(
-        "context {}% {} input {} tk",
+        "context {}% {} input {} tk {} output {} tk {} saved {}%",
         state.metrics.context_percent,
         symbols::SEP,
-        state.metrics.input_tokens
+        state.metrics.input_tokens,
+        symbols::SEP,
+        state.metrics.output_tokens,
+        symbols::SEP,
+        state.metrics.saved_percent
     );
     let left_width = spans_width(&left);
     let right_width = UnicodeWidthStr::width(right_text.as_str());

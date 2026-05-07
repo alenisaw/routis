@@ -577,7 +577,7 @@ fn escape_does_not_exit_routis_from_home_or_setup_welcome() {
 }
 
 #[test]
-fn home_header_has_greeting_metrics_and_dotted_internal_dividers() {
+fn home_header_has_greeting_activity_tracker_and_dotted_internal_dividers() {
     let state = AppState::home();
     let text = render_to_text(150, 44, &state);
 
@@ -590,19 +590,17 @@ fn home_header_has_greeting_metrics_and_dotted_internal_dividers() {
     assert!(text.contains("v0.2.2 TUI command and layout polish"));
     assert!(text.find("Releases").unwrap() < text.find("Recent Sessions").unwrap());
     assert!(!text.contains("Updates"));
-    assert!(text.contains("Metrics"));
-    assert!(text.contains("input"));
-    assert!(text.contains("output"));
+    assert!(text.contains("Activity Tracker"));
     assert!(text.contains("saved"));
-    assert!(text.contains("input    "));
-    assert!(text.contains("output   "));
+    assert!(!text.contains("input    "));
+    assert!(!text.contains("output   "));
     assert!(text.contains("Recent Sessions"));
     assert!(!text.contains("CHANGELOG"));
     assert!(!text.contains("more"));
     assert!(!text.contains("profile  "));
     assert!(text.contains("today"));
     assert!(text.contains("sessions"));
-    assert!(text.contains("0 tasks"));
+    assert!(text.contains("tasks"));
     assert!(text.contains("┊"));
     assert!(!text.contains("Context"));
     assert!(!text.contains("cwd      "));
@@ -641,7 +639,7 @@ fn full_header_omits_context_block() {
     let state = AppState::home();
     let text = render_to_text(150, 44, &state);
 
-    assert!(text.contains("Metrics"));
+    assert!(text.contains("Activity Tracker"));
     assert!(!text.contains("Context"));
     assert!(!text.contains("cwd      "));
     assert!(!text.contains("config   ~/.routis/config.toml"));
@@ -1261,8 +1259,8 @@ fn shell_layout_survives_required_terminal_sizes() {
         assert!(text.contains("Type a task or / for commands"));
         if width >= 100 {
             assert!(
-                text.contains("Metrics"),
-                "missing metrics at {width}x{height}"
+                text.contains("Activity Tracker"),
+                "missing Activity Tracker at {width}x{height}"
             );
         }
         assert!(
