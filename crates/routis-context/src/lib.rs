@@ -29,6 +29,11 @@ pub struct RepoContext {
     pub branch: Option<String>,
     pub commit_count_since_main: Option<usize>,
     pub repo_markers: Vec<String>,
+    pub manifests: Vec<PathBuf>,
+    pub docs: Vec<PathBuf>,
+    pub tests: Vec<PathBuf>,
+    pub workflows: Vec<PathBuf>,
+    pub instruction_files: Vec<PathBuf>,
 }
 
 pub fn collect_repo_context(cwd: impl AsRef<Path>) -> Result<RepoContext, ContextError> {
@@ -38,6 +43,7 @@ pub fn collect_repo_context(cwd: impl AsRef<Path>) -> Result<RepoContext, Contex
     }
 
     let changed_files = changed_files(cwd)?;
+    let repo_summary = repo_summary(cwd);
     Ok(RepoContext {
         file_extension_spread: file_extension_spread(changed_files.iter()),
         risk_zone_hints: detect_risk_zones(changed_files.iter()),
@@ -45,6 +51,11 @@ pub fn collect_repo_context(cwd: impl AsRef<Path>) -> Result<RepoContext, Contex
         branch: current_branch(cwd)?,
         commit_count_since_main: commit_count_since_main(cwd)?,
         repo_markers: repo_markers(cwd),
+        manifests: repo_summary.manifests,
+        docs: repo_summary.docs,
+        tests: repo_summary.tests,
+        workflows: repo_summary.workflows,
+        instruction_files: repo_summary.instruction_files,
     })
 }
 
@@ -254,6 +265,57 @@ fn repo_markers(cwd: &Path) -> Vec<String> {
         markers.push("docs".to_string());
     }
     markers
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct RepoSummary {
+    manifests: Vec<PathBuf>,
+    docs: Vec<PathBuf>,
+    tests: Vec<PathBuf>,
+    workflows: Vec<PathBuf>,
+    instruction_files: Vec<PathBuf>,
+}
+
+fn repo_summary(cwd: &Path) -> RepoSummary {
+    let mut summary = RepoSummary::default();
+    collect_existing(
+        cwd,
+        &[
+            "Cargo.toml",
+            "Cargo.lock",
+            "package.json",
+            "pnpm-lock.yaml",
+            "pyproject.toml",
+            "requirements.txt",
+        ],
+        &mut summary.manifests,
+    );
+    collect_existing(
+        cwd,
+        &["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "docs"],
+        &mut summary.docs,
+    );
+    collect_existing(cwd, &["tests", "crates"], &mut summary.tests);
+    collect_existing(
+        cwd,
+        &[".github/workflows", ".gitlab-ci.yml"],
+        &mut summary.workflows,
+    );
+    collect_existing(
+        cwd,
+        &["AGENTS.md", "ROUTIS.md", ".routis/context.md"],
+        &mut summary.instruction_files,
+    );
+    summary
+}
+
+fn collect_existing(cwd: &Path, candidates: &[&str], out: &mut Vec<PathBuf>) {
+    for candidate in candidates {
+        let path = cwd.join(candidate);
+        if path.exists() {
+            out.push(PathBuf::from(candidate));
+        }
+    }
 }
 
 #[cfg(test)]

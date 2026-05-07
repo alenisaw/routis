@@ -9,8 +9,8 @@ fn help_documents_tui_only_surface() {
         .success()
         .stdout(predicate::str::contains("Interactive TUI"))
         .stdout(predicate::str::contains("--task").not())
-        .stdout(predicate::str::contains("session").not())
-        .stdout(predicate::str::contains("context").not());
+        .stdout(predicate::str::contains("route"))
+        .stdout(predicate::str::contains("context"));
 }
 
 #[test]
@@ -29,4 +29,15 @@ fn removed_cli_task_flags_are_rejected() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("unexpected argument"));
+}
+
+#[test]
+fn route_command_prints_decision_without_tui() {
+    let mut cmd = Command::cargo_bin("routis").unwrap();
+    cmd.args(["route", "fix routing classifier for long prompts"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("selected:"))
+        .stdout(predicate::str::contains("intent:"))
+        .stdout(predicate::str::contains("area: routing"));
 }

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use routis_context::RepoContext;
-use routis_core::{route_task_with_repo_context, Profile};
+use routis_core::{route_task_with_repo_context, Confidence, Profile};
 use routis_policy::{apply_policy_rules, PolicyFile};
 use std::{
     path::{Path, PathBuf},
@@ -18,10 +18,27 @@ pub struct ExecutionPlan {
     pub branch: String,
     pub changed_files: usize,
     pub impact_area: String,
+    pub intent: String,
+    pub area: String,
+    pub scope: String,
+    pub risk: String,
+    pub confidence: String,
     pub context_percent: usize,
     pub saved_percent: usize,
     pub reason: String,
     pub policy_source: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepoMapSummary {
+    pub branch: String,
+    pub changed_files: usize,
+    pub repo_markers: Vec<String>,
+    pub manifests: Vec<String>,
+    pub docs: Vec<String>,
+    pub tests: Vec<String>,
+    pub workflows: Vec<String>,
+    pub instruction_files: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -131,11 +148,45 @@ pub fn plan_execution(
             .unwrap_or_else(|| "-".to_string()),
         changed_files: repo_context.changed_files.len(),
         impact_area,
+        intent: decision.classification.primary_intent.as_str().to_string(),
+        area: decision.classification.area.as_str().to_string(),
+        scope: decision.classification.scope.as_str().to_string(),
+        risk: decision.classification.risk.as_str().to_string(),
+        confidence: decision.classification.confidence.as_str().to_string(),
         context_percent: repo_context.changed_files.len().saturating_mul(6).min(100),
-        saved_percent: 32,
+        saved_percent: saved_percent(decision.classification.confidence),
         reason: decision.explain,
         policy_source: String::new(),
     })
+}
+
+#[must_use]
+pub fn repo_map_summary(context: &RepoContext) -> RepoMapSummary {
+    RepoMapSummary {
+        branch: context.branch.clone().unwrap_or_else(|| "-".to_string()),
+        changed_files: context.changed_files.len(),
+        repo_markers: context.repo_markers.clone(),
+        manifests: paths_to_strings(&context.manifests),
+        docs: paths_to_strings(&context.docs),
+        tests: paths_to_strings(&context.tests),
+        workflows: paths_to_strings(&context.workflows),
+        instruction_files: paths_to_strings(&context.instruction_files),
+    }
+}
+
+fn paths_to_strings(paths: &[PathBuf]) -> Vec<String> {
+    paths
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect()
+}
+
+fn saved_percent(confidence: Confidence) -> usize {
+    match confidence {
+        Confidence::High => 38,
+        Confidence::Medium => 28,
+        Confidence::Low => 12,
+    }
 }
 
 #[must_use]

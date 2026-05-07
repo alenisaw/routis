@@ -80,7 +80,7 @@ impl ThemePalette {
                 p.rail = Color::Rgb(88, 72, 146);
                 p.rail_glow = Color::Rgb(146, 122, 214);
             }
-            "Neon Magenta" => {
+            "Soft Magenta" | "Neon Magenta" => {
                 p.accent = Color::Rgb(210, 104, 158);
                 p.accent_soft = Color::Rgb(156, 58, 106);
                 p.selected_bg = Color::Rgb(82, 28, 52);

@@ -7,9 +7,12 @@ This release makes Routis aware of repository state before routing tasks.
 ### Added
 
 - Added repository context collection for branch, changed files, file extensions, and risk zones.
+- Added RepoMapSummary for manifests, docs, tests, workflows, and instruction files.
+- Added Routing IR for English prompt classification by intent, area, scope, risk, confidence, and target hints.
 - Added risk zone detection for config, auth, schema, workflow, package, tests, docs, and TUI/UI paths.
 - Added repo-aware automatic routing so high-risk repository changes can raise the selected profile.
 - Added `routis context` for inspecting repository context directly.
+- Added `routis route <task>` and `/route <task>` for route previews without execution.
 - Added `/context` and `/policy-file <path>` to the TUI shell.
 - Added policy `rules` with `if_risk_zone`, `if_path`, `min_profile`, and `max_profile`.
 - Added local route session storage under `~/.routis/sessions`.
@@ -18,8 +21,9 @@ This release makes Routis aware of repository state before routing tasks.
 ### Changed
 
 - Updated the default policy file with high-risk minimum profile rules and a README cap rule.
+- Updated TUI header polish with compact mascot rendering, dotted internal dividers, calmer theme naming, and dotted metric bars.
 - Extended CLI `--explain` output with branch, changed file count, and risk zones.
-- Extended `/status` with policy file and repository context details.
+- Extended `/status`, `/context`, and task planning events with area, scope, risk, and confidence details.
 - Updated `/sessions` to prefer saved route sessions while keeping prompt history as a fallback.
 
 ### Quality

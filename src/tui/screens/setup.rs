@@ -508,7 +508,7 @@ fn label_for_theme(index: usize, name: &'static str) -> &'static str {
     match index {
         0 => "1  Routis Cyan",
         1 => "2  Routis Violet",
-        2 => "3  Neon Magenta",
+        2 => "3  Soft Magenta",
         3 => "4  Midnight Blue",
         4 => "5  Monochrome",
         _ => name,

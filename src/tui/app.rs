@@ -632,11 +632,17 @@ fn apply_command(
             ) {
                 Ok(context) => {
                     state.repo_context = repo_context_state_from_context(&context);
-                    let impact_area = crate::route_plan::format_impact_area(&context);
+                    let summary = crate::route_plan::repo_map_summary(&context);
                     let mut lines = vec![
-                        format!("branch: {}", context.branch.as_deref().unwrap_or("-")),
-                        format!("changed files: {}", context.changed_files.len()),
-                        format!("area: {impact_area}"),
+                        format!("branch: {}", summary.branch),
+                        format!("changed files: {}", summary.changed_files),
+                        format!("area: {}", crate::route_plan::format_impact_area(&context)),
+                        format!("markers: {}", display_list(&summary.repo_markers)),
+                        format!("manifests: {}", display_list(&summary.manifests)),
+                        format!("docs: {}", display_list(&summary.docs)),
+                        format!("tests: {}", display_list(&summary.tests)),
+                        format!("workflows: {}", display_list(&summary.workflows)),
+                        format!("instructions: {}", display_list(&summary.instruction_files)),
                     ];
                     lines.extend(
                         context
@@ -650,6 +656,39 @@ fn apply_command(
                 Err(error) => vec![format!("context unavailable: {error}")],
             };
             state.ui.status_line = "repository context loaded".to_string();
+            push_command_event(state, "Command result", lines);
+            record_result = false;
+        }
+        Ok(SlashCommand::Route) => {
+            let task = state
+                .ui
+                .input
+                .split_once(char::is_whitespace)
+                .map(|(_, rest)| rest)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("analyze repository routing");
+            let lines = match crate::route_plan::build_execution_plan(
+                task,
+                &state.config.policy_file,
+                std::env::current_dir().unwrap_or_default(),
+            ) {
+                Ok(plan) => vec![
+                    format!("task: {task}"),
+                    format!(
+                        "selected: {} / {} / {}",
+                        plan.profile, plan.model, plan.reasoning
+                    ),
+                    format!("intent: {}", plan.intent),
+                    format!("area: {}", plan.area),
+                    format!("scope: {}", plan.scope),
+                    format!("risk: {}", plan.risk),
+                    format!("confidence: {}", plan.confidence),
+                    format!("reason: {}", plan.reason),
+                ],
+                Err(error) => vec![format!("route unavailable: {error}")],
+            };
+            state.ui.status_line = "route preview generated".to_string();
             push_command_event(state, "Command result", lines);
             record_result = false;
         }
@@ -843,6 +882,14 @@ fn history_lines(history: &ShellHistory) -> Vec<String> {
     }
     lines.insert(0, format!("recent prompts: {}", lines.len()));
     lines
+}
+
+fn display_list(values: &[String]) -> String {
+    if values.is_empty() {
+        "-".to_string()
+    } else {
+        values.join(", ")
+    }
 }
 
 fn push_status_event(state: &mut AppState) {

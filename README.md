@@ -28,7 +28,7 @@
 
 Routis is an execution-intelligence layer for AI coding workflows.
 
-It adds a deliberate routing step before execution. Given a task, Routis evaluates the request, applies local policy, selects an execution profile, prepares a Codex command preview, and explains why that route was chosen.
+It adds a deliberate routing step before execution. Given a task, Routis classifies the request, reads repository signals, applies local policy, selects an execution profile, and explains why that route was chosen.
 
 The point is simple: AI-assisted development should not use the same execution path for every task. Small edits should stay lightweight. Risky changes should receive stronger handling. Model choice, reasoning depth, and command shape should be explicit instead of hidden in shell habits.
 
@@ -51,7 +51,8 @@ Routis combines routing, context control, policy, explainability, and local reco
 | Capability | What it does |
 |---|---|
 | Adaptive routing | Selects a fitting execution profile for the task |
-| Context control | Uses repository signals without blindly loading everything |
+| Routing IR | Classifies English prompts by intent, area, scope, risk, confidence, and target hints |
+| Context control | Summarizes branch, changed files, manifests, docs, tests, workflows, and instruction files |
 | Risk detection | Recognizes sensitive zones such as config, auth, schema, workflow, and package files |
 | Policy control | Applies local routing rules and project-specific overrides |
 | Dry run | Shows the route and command preview before execution |
@@ -140,7 +141,8 @@ Useful TUI commands:
 | `/theme` | Open the theme picker with live preview |
 | `/sessions` | Open searchable recent-session selection |
 | `/history` | Show local history status |
-| `/context` | Show branch, changed files, and Impact Area |
+| `/context` | Show branch, changed files, area, and repo map markers |
+| `/route <task>` | Preview the selected route without executing |
 | `/policy-file <path>` | Set the routing policy file for this shell |
 | `/clear` | Clear the current TUI timeline |
 | `/config` | Show the local config path |
@@ -152,7 +154,7 @@ Launch the TUI:
 routis
 ```
 
-Enter a task in the input row. Routis plans locally, shows the selected profile, model, reasoning, branch, changed file count, and Impact Area, then waits for `proceed`, `edit`, or `cancel`.
+Enter a task in the input row. Routis plans locally, shows the prompt, provider, model and reasoning, selected area, branch, changed file count, and confidence, then waits for `proceed`, `edit`, or `cancel`.
 
 The TUI stores local config under `~/.routis/config.toml`, recent prompt history under `~/.routis/shell_history`, and route sessions under `~/.routis/sessions`. Provider diagnostics locate `codex` from the system PATH and run `codex --version`; on Windows, Routis prefers executable shims such as `.cmd` or `.exe` over blocked PowerShell scripts.
 
@@ -164,6 +166,10 @@ routis
 Options:
   -h, --help                Print help
   -V, --version             Print version
+
+Commands:
+  route <task>              Preview the selected route without opening the TUI
+  context                   Print the repository context summary
 ```
 
 ## Policy File

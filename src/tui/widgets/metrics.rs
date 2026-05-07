@@ -31,7 +31,7 @@ fn metric_lines_with_total(
             metrics.context_percent,
             100,
             "%",
-            palette.accent(),
+            palette.cyan(),
             palette,
             gauge_width,
         ),
@@ -115,7 +115,7 @@ fn bar_parts(value: usize, max: usize, width: usize) -> (String, String) {
         .unwrap_or(0)
         .min(width);
     let empty = width.saturating_sub(filled);
-    ("#".repeat(filled), "-".repeat(empty))
+    ("•".repeat(filled), "·".repeat(empty))
 }
 
 #[must_use]

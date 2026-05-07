@@ -5,7 +5,6 @@ use crate::tui::{
     theme::ThemePalette,
     widgets::{
         dividers::render_vertical_dots,
-        mascot::mascot_lines,
         metrics::{metric_lines, metric_lines_compact},
     },
 };
@@ -78,8 +77,8 @@ fn render_medium(frame: &mut Frame, area: Rect, state: &AppState, palette: Theme
 
 fn render_small(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
     let rows = Layout::vertical([
-        Constraint::Length(8),
-        Constraint::Length(7),
+        Constraint::Length(5),
+        Constraint::Length(5),
         Constraint::Min(1),
     ])
     .split(area);
@@ -98,7 +97,7 @@ fn render_separator(frame: &mut Frame, area: Rect, palette: ThemePalette) {
 
 fn render_profile(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
     let display_name = truncate(&state.config.display_name, 22);
-    if area.height < 10 {
+    if area.height < 7 {
         let lines = vec![
             Line::styled(
                 center_display(&format!("Welcome, {display_name}!"), area.width),
@@ -111,16 +110,17 @@ fn render_profile(frame: &mut Frame, area: Rect, state: &AppState, palette: Them
     }
 
     let mut lines = Vec::new();
-    let content_height = mascot_lines().len() + 3;
+    let mascot = compact_mascot_lines();
+    let content_height = mascot.len() + 3;
     let top_pad = (area.height as usize)
         .saturating_sub(content_height)
         .saturating_div(2)
-        .min(2);
+        .min(1);
     for _ in 0..top_pad {
         lines.push(Line::raw(""));
     }
 
-    for line in mascot_lines() {
+    for line in mascot {
         lines.push(Line::styled(
             center_display(line.trim(), area.width),
             palette.accent(),
@@ -140,15 +140,19 @@ fn render_profile(frame: &mut Frame, area: Rect, state: &AppState, palette: Them
 }
 
 fn render_updates_commands(frame: &mut Frame, area: Rect, palette: ThemePalette) {
-    let mut lines = vec![
+    let chunks = header_sections(area);
+    let releases = vec![
         Line::styled("Releases", palette.section_title()),
         bullet(release_notes()[0], area.width, palette),
         bullet(release_notes()[1], area.width, palette),
-        Line::raw(""),
-        section_rule(area.width, palette),
-        Line::styled("Recent Sessions", palette.section_title()),
     ];
+    frame.render_widget(
+        Paragraph::new(releases).wrap(Wrap { trim: false }),
+        chunks[0],
+    );
+    frame.render_widget(Paragraph::new(dotted_rule(area.width, palette)), chunks[1]);
 
+    let mut lines = vec![Line::styled("Recent Sessions", palette.section_title())];
     let recent = recent_sessions(2);
     if recent.is_empty() {
         lines.push(Line::styled("no local sessions yet", palette.muted()));
@@ -158,10 +162,11 @@ fn render_updates_commands(frame: &mut Frame, area: Rect, palette: ThemePalette)
         }
     }
 
-    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), area);
+    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), chunks[2]);
 }
 
 fn render_model_metrics(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
+    let chunks = header_sections(area);
     let mut lines = vec![Line::styled("Metrics", palette.section_title())];
 
     let metrics = if area.height <= 10 {
@@ -170,12 +175,47 @@ fn render_model_metrics(frame: &mut Frame, area: Rect, state: &AppState, palette
         metric_lines(&state.metrics, palette, area.width)
     };
     lines.extend(metrics);
-    if area.height > 8 {
-        lines.push(section_rule(area.width, palette));
-        lines.push(kv_line_width("today", "0 tasks", area.width, palette));
-        lines.push(kv_line_width("sessions", "2 shown", area.width, palette));
+    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), chunks[0]);
+    frame.render_widget(Paragraph::new(dotted_rule(area.width, palette)), chunks[1]);
+    let counters = vec![
+        kv_line_width("today", "0 tasks", area.width, palette),
+        kv_line_width("sessions", "2 shown", area.width, palette),
+    ];
+    frame.render_widget(
+        Paragraph::new(counters).wrap(Wrap { trim: false }),
+        chunks[2],
+    );
+}
+
+fn header_sections(area: Rect) -> std::rc::Rc<[Rect]> {
+    Layout::vertical([
+        Constraint::Length(6.min(area.height)),
+        Constraint::Length(1),
+        Constraint::Min(1),
+    ])
+    .split(area)
+}
+
+fn dotted_rule(width: u16, palette: ThemePalette) -> Line<'static> {
+    let mut line = String::with_capacity(width as usize);
+    for index in 0..width as usize {
+        line.push(if index % 2 == 0 {
+            symbols::DOT.chars().next().unwrap_or('.')
+        } else {
+            ' '
+        });
     }
-    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), area);
+    Line::styled(line, palette.border())
+}
+
+fn compact_mascot_lines() -> [&'static str; 5] {
+    [
+        "   ██    ██   ",
+        "  ████  ████  ",
+        " █  ██████  █ ",
+        " ████████████ ",
+        "   ██    ██   ",
+    ]
 }
 
 fn bullet(text: &'static str, width: u16, palette: ThemePalette) -> Line<'static> {
@@ -286,11 +326,6 @@ fn truncate(value: &str, max: usize) -> String {
 
 fn value_width(width: u16) -> usize {
     (width as usize).saturating_sub(10).max(8)
-}
-
-fn section_rule(width: u16, palette: ThemePalette) -> Line<'static> {
-    let line = symbols::H.repeat(width as usize);
-    Line::styled(line, palette.border())
 }
 
 fn centered_workspace_line(width: u16, palette: ThemePalette) -> Line<'static> {

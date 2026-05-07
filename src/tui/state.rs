@@ -425,7 +425,11 @@ impl AppState {
                     format!("Provider: {}", self.config.provider),
                     format!("Model & reason: {} / {}", plan.model, plan.reasoning),
                     format!("Repo: {} changed files", plan.changed_files),
-                    format!("Area: {}", plan.impact_area),
+                    format!(
+                        "Route: selected {} / {} · scope {} · confidence {}",
+                        plan.profile, plan.area, plan.scope, plan.confidence
+                    ),
+                    format!("Area: {}", plan.area),
                     format!("Policy: {}", plan.policy_source),
                     format!("Reason: {}", plan.reason),
                 ],
@@ -528,6 +532,11 @@ fn execution_plan(task: &str, state: &AppState) -> crate::route_plan::ExecutionP
         branch: state.repo_context.branch.clone(),
         changed_files: state.repo_context.changed_files,
         impact_area: state.repo_context.impact_area.clone(),
+        intent: "unknown".to_string(),
+        area: "unknown".to_string(),
+        scope: "unknown".to_string(),
+        risk: "medium".to_string(),
+        confidence: "low".to_string(),
         context_percent: state.metrics.context_percent,
         saved_percent: state.metrics.saved_percent,
         reason: "fallback plan after routing error".to_string(),
@@ -557,13 +566,13 @@ pub fn reasoning_name(index: usize) -> &'static str {
     }
 }
 
-/// 5 themes: 0 = Routis Cyan, 1 = Routis Violet, 2 = Neon Magenta,
+/// 5 themes: 0 = Routis Cyan, 1 = Routis Violet, 2 = Soft Magenta,
 ///           3 = Midnight Blue, 4 = Monochrome.
 #[must_use]
 pub fn theme_name(index: usize) -> &'static str {
     match index {
         1 => "Routis Violet",
-        2 => "Neon Magenta",
+        2 => "Soft Magenta",
         3 => "Midnight Blue",
         4 => "Monochrome",
         _ => "Routis Cyan",
