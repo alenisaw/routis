@@ -74,7 +74,7 @@ fn render_header_block(frame: &mut Frame, area: Rect, state: &AppState, palette:
     }
 
     let block = Block::default()
-        .borders(Borders::ALL)
+        .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
         .border_type(BorderType::Rounded)
         .border_style(palette.border_active())
         .title(Span::styled(
@@ -85,6 +85,16 @@ fn render_header_block(frame: &mut Frame, area: Rect, state: &AppState, palette:
     let inner = block.inner(area);
     frame.render_widget(block, area);
     render_header(frame, inner, state, palette);
+    render_dotted_rule(
+        frame,
+        Rect {
+            x: area.x.saturating_add(1),
+            y: area.y + area.height.saturating_sub(1),
+            width: area.width.saturating_sub(2),
+            height: 1,
+        },
+        palette,
+    );
 }
 
 fn shell_area(area: Rect) -> Rect {
@@ -100,11 +110,11 @@ fn shell_area(area: Rect) -> Rect {
 
 fn dashboard_height(area: Rect) -> u16 {
     let desired = match area.width {
-        144.. => 16.min(area.height.saturating_sub(8)),
-        94..=143 => 11.min(area.height.saturating_sub(4)),
-        _ => 12.min(area.height.saturating_sub(4)),
+        144.. => 13.min(area.height.saturating_sub(8)),
+        94..=143 => 10.min(area.height.saturating_sub(4)),
+        _ => 11.min(area.height.saturating_sub(4)),
     };
-    desired.max(9).min(area.height.saturating_sub(7).max(9))
+    desired.max(8).min(area.height.saturating_sub(7).max(8))
 }
 
 fn input_block_height(state: &AppState) -> u16 {
@@ -160,13 +170,22 @@ fn render_rule(frame: &mut Frame, area: Rect, palette: ThemePalette) {
     if area.width == 0 || area.height == 0 {
         return;
     }
-    frame.render_widget(
-        Paragraph::new(Line::styled(
-            symbols::H.repeat(area.width as usize),
-            palette.rail(),
-        )),
-        area,
-    );
+    render_dotted_rule(frame, area, palette);
+}
+
+fn render_dotted_rule(frame: &mut Frame, area: Rect, palette: ThemePalette) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    let mut line = String::with_capacity(area.width as usize);
+    for index in 0..area.width as usize {
+        line.push(if index % 2 == 0 {
+            symbols::DOT.chars().next().unwrap_or('•')
+        } else {
+            ' '
+        });
+    }
+    frame.render_widget(Paragraph::new(Line::styled(line, palette.rail())), area);
 }
 
 fn render_runtime_line(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {

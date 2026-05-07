@@ -144,7 +144,7 @@ impl ThemePalette {
     }
     #[must_use]
     pub fn section_title(self) -> Style {
-        Style::default().fg(self.accent).bold()
+        Style::default().fg(self.accent)
     }
     #[must_use]
     pub fn text(self) -> Style {

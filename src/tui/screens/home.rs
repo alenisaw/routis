@@ -26,7 +26,7 @@ pub fn render_header(frame: &mut Frame, area: Rect, state: &AppState, palette: T
 
     let content = area.inner(Margin {
         horizontal: 1,
-        vertical: if area.height >= 16 { 1 } else { 0 },
+        vertical: 0,
     });
 
     match LayoutMode::for_width(area.width.saturating_add(6)) {
@@ -127,7 +127,7 @@ fn render_profile(frame: &mut Frame, area: Rect, state: &AppState, palette: Them
         ));
     }
 
-    if area.height > 10 {
+    if area.height > 9 {
         lines.push(Line::raw(""));
     }
     lines.push(Line::styled(
@@ -169,7 +169,7 @@ fn render_model_metrics(frame: &mut Frame, area: Rect, state: &AppState, palette
     let chunks = header_sections(area);
     let mut lines = vec![Line::styled("Metrics", palette.section_title())];
 
-    let metrics = if area.height <= 10 {
+    let metrics = if chunks[0].height <= 5 {
         metric_lines_compact(&state.metrics, palette, area.width)
     } else {
         metric_lines(&state.metrics, palette, area.width)
@@ -189,7 +189,7 @@ fn render_model_metrics(frame: &mut Frame, area: Rect, state: &AppState, palette
 
 fn header_sections(area: Rect) -> std::rc::Rc<[Rect]> {
     Layout::vertical([
-        Constraint::Length(6.min(area.height)),
+        Constraint::Length(5.min(area.height)),
         Constraint::Length(1),
         Constraint::Min(1),
     ])
