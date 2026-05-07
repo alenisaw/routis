@@ -618,7 +618,7 @@ fn home_header_has_greeting_metrics_and_dotted_internal_dividers() {
         .position(|line| line.contains("Recent Sessions"))
         .and_then(|index| index.checked_sub(1))
         .unwrap();
-    assert!(lines[releases_rule_y].contains("┊ ┊ ┊ ┊"));
+    assert!(lines[releases_rule_y].contains("┄┄┄┄"));
 }
 
 #[test]

@@ -196,10 +196,7 @@ fn header_sections(area: Rect) -> std::rc::Rc<[Rect]> {
 }
 
 fn dotted_rule(width: u16, palette: ThemePalette) -> Line<'static> {
-    let mut line = String::with_capacity(width as usize);
-    for index in 0..width as usize {
-        line.push(if index % 2 == 0 { '\u{250a}' } else { ' ' });
-    }
+    let line = "\u{2504}".repeat(width as usize);
     Line::styled(line, palette.border())
 }
 
