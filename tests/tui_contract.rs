@@ -591,11 +591,9 @@ fn home_header_has_greeting_metrics_and_dotted_internal_dividers() {
     assert!(text.find("Releases").unwrap() < text.find("Recent Sessions").unwrap());
     assert!(!text.contains("Updates"));
     assert!(text.contains("Metrics"));
-    assert!(text.contains("context"));
     assert!(text.contains("input"));
     assert!(text.contains("output"));
     assert!(text.contains("saved"));
-    assert!(text.contains("context  "));
     assert!(text.contains("input    "));
     assert!(text.contains("output   "));
     assert!(text.contains("Recent Sessions"));
@@ -699,7 +697,7 @@ profiles:
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
     );
 
-    for _ in 0..8 {
+    for _ in 0..72 {
         tick_for_test(&mut state);
     }
 
@@ -738,7 +736,7 @@ fn awaiting_confirmation_shows_input_choices() {
         &mut state,
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
     );
-    for _ in 0..8 {
+    for _ in 0..72 {
         tick_for_test(&mut state);
     }
 
@@ -762,7 +760,8 @@ fn input_block_shows_runtime_status_below_prompt() {
     assert!(text.contains("gpt-5.5"));
     assert!(text.contains("branch"));
     assert!(text.contains("idle"));
-    assert!(text.contains("Enter send"));
+    assert!(text.contains("context"));
+    assert!(text.contains("input"));
 }
 
 #[test]
@@ -1086,7 +1085,7 @@ fn session_confirm_flow_accepts_proceed_edit_and_cancel() {
         &mut state,
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
     );
-    for _ in 0..8 {
+    for _ in 0..72 {
         tick_for_test(&mut state);
     }
     assert_eq!(state.session.phase, SessionPhase::AwaitingConfirmation);
@@ -1109,7 +1108,7 @@ fn session_confirm_flow_accepts_proceed_edit_and_cancel() {
         &mut state,
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
     );
-    for _ in 0..8 {
+    for _ in 0..72 {
         tick_for_test(&mut state);
     }
     handle_key_for_test(&mut state, KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
@@ -1128,7 +1127,7 @@ fn ready_session_stays_ready_after_tick() {
         &mut state,
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
     );
-    for _ in 0..8 {
+    for _ in 0..72 {
         tick_for_test(&mut state);
     }
 

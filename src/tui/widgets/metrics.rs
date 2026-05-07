@@ -27,15 +27,6 @@ fn metric_lines_with_total(
     let gauge_width = gauge_width(area_width);
     let mut lines = vec![
         metric_line(
-            "context",
-            metrics.context_percent,
-            100,
-            "%",
-            palette.cyan(),
-            palette,
-            gauge_width,
-        ),
-        metric_line(
             "input",
             metrics.input_tokens,
             4096,

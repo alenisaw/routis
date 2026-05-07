@@ -445,7 +445,11 @@ impl AppState {
             },
         ]);
         self.session.events = events;
-        self.session.visible_lines = self.session_total_render_lines();
+        self.session.visible_lines = if existing_lines == 0 {
+            4
+        } else {
+            self.session_total_render_lines()
+        };
         self.ui.input.clear();
         self.ui.command_palette_open = false;
         self.ui.shortcuts_open = false;
@@ -481,7 +485,9 @@ impl AppState {
         }
         let max_lines = self.session_total_render_lines();
         if self.session.visible_lines < max_lines {
-            self.session.visible_lines = (self.session.visible_lines + 2).min(max_lines);
+            if self.ui.frame.is_multiple_of(3) {
+                self.session.visible_lines = (self.session.visible_lines + 1).min(max_lines);
+            }
             self.session.phase = SessionPhase::Running;
         } else {
             self.session.phase = SessionPhase::AwaitingConfirmation;

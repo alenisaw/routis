@@ -17,6 +17,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
     Frame,
 };
+use unicode_width::UnicodeWidthStr;
 
 const MIN_TERMINAL_WIDTH: u16 = 80;
 const MIN_TERMINAL_HEIGHT: u16 = 24;
@@ -173,60 +174,50 @@ fn render_runtime_line(frame: &mut Frame, area: Rect, state: &AppState, palette:
     if area.width == 0 || area.height == 0 {
         return;
     }
-    let mut spans = vec![
-        pill(
-            provider_label(&state.config.provider),
+    let left = vec![
+        Span::styled(
+            provider_label(&state.config.provider).to_string(),
             palette.provider(&state.config.provider),
         ),
         separator(palette),
-        pill(&state.current_plan.model, palette.text()),
+        Span::styled(state.current_plan.model.clone(), palette.text()),
         separator(palette),
-        pill(
-            &state.current_plan.reasoning,
+        Span::styled(
+            state.current_plan.reasoning.clone(),
             reasoning_style(&state.current_plan.reasoning, palette),
         ),
         separator(palette),
         Span::styled("branch ", palette.dim()),
         Span::styled(state.repo_context.branch.clone(), palette.muted()),
-        separator(palette),
     ];
+    let right_text = format!(
+        "context {}% {} input {} tk",
+        state.metrics.context_percent,
+        symbols::SEP,
+        state.metrics.input_tokens
+    );
+    let left_width = spans_width(&left);
+    let right_width = UnicodeWidthStr::width(right_text.as_str());
+    let available = area.width as usize;
+    let gap = available
+        .saturating_sub(left_width.saturating_add(right_width))
+        .max(1);
 
-    if state.session.phase == SessionPhase::AwaitingConfirmation {
-        spans.extend([
-            Span::styled(symbols::ARROWS, palette.accent().bold()),
-            Span::styled(" choose", palette.muted()),
-            separator(palette),
-            Span::styled("Enter", palette.text().bold()),
-            Span::styled(" confirm", palette.muted()),
-            separator(palette),
-            Span::styled("Esc", palette.text().bold()),
-            Span::styled(" decline", palette.muted()),
-            separator(palette),
-            Span::styled("? help", palette.muted()),
-        ]);
-    } else {
-        spans.extend([
-            Span::styled("Enter", palette.text().bold()),
-            Span::styled(" send", palette.muted()),
-            separator(palette),
-            Span::styled("/", palette.text().bold()),
-            Span::styled(" commands", palette.muted()),
-            separator(palette),
-            Span::styled("? help", palette.muted()),
-            separator(palette),
-            Span::styled("Esc back", palette.muted()),
-        ]);
-    }
-
+    let mut spans = left;
+    spans.push(Span::raw(" ".repeat(gap)));
+    spans.push(Span::styled(right_text, palette.muted()));
     frame.render_widget(Paragraph::new(Line::from(spans)), area);
-}
-
-fn pill(value: &str, style: Style) -> Span<'static> {
-    Span::styled(format!(" {value} "), style)
 }
 
 fn separator(palette: ThemePalette) -> Span<'static> {
     Span::styled(format!(" {} ", symbols::SEP), palette.dim())
+}
+
+fn spans_width(spans: &[Span<'_>]) -> usize {
+    spans
+        .iter()
+        .map(|span| UnicodeWidthStr::width(span.content.as_ref()))
+        .sum()
 }
 
 fn reasoning_style(reasoning: &str, palette: ThemePalette) -> Style {

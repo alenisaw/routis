@@ -110,11 +110,18 @@ fn render_profile(frame: &mut Frame, area: Rect, state: &AppState, palette: Them
 
     let mut lines = Vec::new();
     let mascot = compact_mascot_lines();
-    let content_height = mascot.len() + 3;
-    let top_pad = (area.height as usize)
-        .saturating_sub(content_height)
-        .saturating_div(2)
-        .min(1);
+    let content_height = mascot.len() + 3 + usize::from(area.height > 9);
+    let top_pad = if area.height >= 10 {
+        2.min(area.height as usize).min(
+            (area.height as usize)
+                .saturating_sub(content_height)
+                .saturating_add(1),
+        )
+    } else {
+        (area.height as usize)
+            .saturating_sub(content_height)
+            .saturating_div(2)
+    };
     for _ in 0..top_pad {
         lines.push(Line::raw(""));
     }
