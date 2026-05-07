@@ -1,7 +1,6 @@
 use crate::tui::{
     history::recent_sessions,
     state::{AppState, LayoutMode},
-    symbols,
     theme::ThemePalette,
     widgets::{
         dividers::render_vertical_dots,
@@ -199,11 +198,7 @@ fn header_sections(area: Rect) -> std::rc::Rc<[Rect]> {
 fn dotted_rule(width: u16, palette: ThemePalette) -> Line<'static> {
     let mut line = String::with_capacity(width as usize);
     for index in 0..width as usize {
-        line.push(if index % 2 == 0 {
-            symbols::DOT.chars().next().unwrap_or('.')
-        } else {
-            ' '
-        });
+        line.push(if index % 2 == 0 { '\u{250a}' } else { ' ' });
     }
     Line::styled(line, palette.border())
 }
