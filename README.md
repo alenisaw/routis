@@ -9,10 +9,14 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/alenisaw/routis/releases/latest"><img src="https://img.shields.io/github/v/release/alenisaw/routis?style=flat&label=release&color=58A6FF" alt="Release"></a>
   <a href="https://github.com/alenisaw/routis/stargazers"><img src="https://img.shields.io/github/stars/alenisaw/routis?style=flat&color=F4C430" alt="Stars"></a>
   <a href="https://github.com/alenisaw/routis/commits/main"><img src="https://img.shields.io/github/last-commit/alenisaw/routis?style=flat" alt="Last Commit"></a>
+</p>
+
+<p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/alenisaw/routis?style=flat&color=97CA00" alt="License"></a>
-  <a href="https://github.com/alenisaw/routis/actions"><img src="https://img.shields.io/github/actions/workflow/status/alenisaw/routis/ci.yml?branch=main&label=ci" alt="CI"></a>
+  <a href="https://github.com/alenisaw/routis/actions/workflows/ci.yml"><img src="https://github.com/alenisaw/routis/actions/workflows/ci.yml/badge.svg?branch=main&event=push" alt="CI"></a>
 </p>
 
 <p align="center">
