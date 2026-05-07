@@ -1,0 +1,9 @@
+pub const H: &str = "\u{2500}";
+pub const V: &str = "\u{2502}";
+pub const BRANCH: &str = "\u{251c}\u{2500}";
+pub const LAST: &str = "\u{2514}\u{2500}";
+pub const DOT: &str = "\u{25cf}";
+pub const DIAMOND: &str = "\u{25c7}";
+pub const FILLED_DIAMOND: &str = "\u{25c6}";
+pub const ARROWS: &str = "\u{2191}\u{2193}";
+pub const SEP: &str = "\u{2022}";

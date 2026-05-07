@@ -17,6 +17,11 @@ pub struct ThemePalette {
     pub cyan: Color,
     pub warning: Color,
     pub error: Color,
+    pub provider_codex: Color,
+    pub provider_claude: Color,
+    pub provider_qwen: Color,
+    pub rail: Color,
+    pub rail_glow: Color,
 }
 
 impl ThemePalette {
@@ -36,6 +41,11 @@ impl ThemePalette {
             cyan: Color::Rgb(92, 200, 215),
             warning: Color::Rgb(214, 179, 90),
             error: Color::Rgb(224, 122, 122),
+            provider_codex: Color::Rgb(238, 242, 245),
+            provider_claude: Color::Rgb(214, 132, 92),
+            provider_qwen: Color::Rgb(136, 145, 255),
+            rail: Color::Rgb(58, 166, 182),
+            rail_glow: Color::Rgb(92, 200, 215),
         };
 
         match theme {
@@ -52,6 +62,9 @@ impl ThemePalette {
                 p.success = Color::Rgb(110, 210, 160);
                 p.warning = Color::Rgb(208, 172, 80);
                 p.error = Color::Rgb(220, 112, 112);
+                p.provider_qwen = Color::Rgb(150, 170, 255);
+                p.rail = Color::Rgb(59, 130, 246);
+                p.rail_glow = Color::Rgb(125, 211, 252);
             }
             "Routis Violet" => {
                 p.accent = Color::Rgb(167, 139, 250);
@@ -66,6 +79,9 @@ impl ThemePalette {
                 p.success = Color::Rgb(120, 220, 160);
                 p.warning = Color::Rgb(212, 176, 88);
                 p.error = Color::Rgb(228, 120, 140);
+                p.provider_qwen = Color::Rgb(150, 150, 255);
+                p.rail = Color::Rgb(124, 58, 237);
+                p.rail_glow = Color::Rgb(167, 139, 250);
             }
             "Neon Magenta" => {
                 p.accent = Color::Rgb(244, 114, 182);
@@ -80,6 +96,10 @@ impl ThemePalette {
                 p.success = Color::Rgb(120, 220, 155);
                 p.warning = Color::Rgb(218, 182, 88);
                 p.error = Color::Rgb(248, 112, 112);
+                p.provider_codex = Color::Rgb(246, 238, 244);
+                p.provider_qwen = Color::Rgb(156, 163, 255);
+                p.rail = Color::Rgb(190, 70, 138);
+                p.rail_glow = Color::Rgb(244, 114, 182);
             }
             "Monochrome" => {
                 p.accent = Color::Rgb(229, 231, 235);
@@ -94,6 +114,11 @@ impl ThemePalette {
                 p.success = Color::Rgb(200, 206, 212);
                 p.warning = Color::Rgb(172, 168, 164);
                 p.error = Color::Rgb(232, 230, 228);
+                p.provider_codex = Color::Rgb(235, 236, 238);
+                p.provider_claude = Color::Rgb(190, 184, 178);
+                p.provider_qwen = Color::Rgb(194, 198, 210);
+                p.rail = Color::Rgb(156, 163, 175);
+                p.rail_glow = Color::Rgb(229, 231, 235);
             }
             _ => {}
         }
@@ -111,6 +136,14 @@ impl ThemePalette {
     #[must_use]
     pub fn border_active(self) -> Style {
         Style::default().fg(self.accent)
+    }
+    #[must_use]
+    pub fn rail(self) -> Style {
+        Style::default().fg(self.rail)
+    }
+    #[must_use]
+    pub fn rail_glow(self) -> Style {
+        Style::default().fg(self.rail_glow).bold()
     }
     #[must_use]
     pub fn section_title(self) -> Style {
@@ -164,6 +197,20 @@ impl ThemePalette {
     #[must_use]
     pub fn selected(self) -> Style {
         Style::default().fg(Color::White).bg(self.selected_bg)
+    }
+
+    #[must_use]
+    pub fn provider(self, source: &str) -> Style {
+        let color = if source.contains("Claude") {
+            self.provider_claude
+        } else if source.contains("Qwen") {
+            self.provider_qwen
+        } else if source.contains("Codex") {
+            self.provider_codex
+        } else {
+            self.accent
+        };
+        Style::default().fg(color)
     }
 
     // ── Phase badge styles (filled bg, contrasting fg) ──────────────────

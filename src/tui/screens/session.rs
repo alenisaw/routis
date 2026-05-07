@@ -1,6 +1,7 @@
 use crate::tui::{
     screens::home::render_header,
     state::{AppState, SessionPhase},
+    symbols,
     theme::ThemePalette,
     widgets::{
         input::render_input,
@@ -11,6 +12,7 @@ use crate::tui::{
 };
 use ratatui::{
     layout::{Alignment, Constraint, Layout, Margin, Rect},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
     Frame,
@@ -38,12 +40,11 @@ pub fn render_shell(frame: &mut Frame, area: Rect, state: &AppState, palette: Th
     } else {
         Constraint::Min(4)
     };
-    let input_height = input_block_height(state);
     let chunks = Layout::vertical([
         Constraint::Length(header_h),
         body_constraint,
         Constraint::Length(palette_height),
-        Constraint::Length(input_height),
+        Constraint::Length(input_block_height(state)),
     ])
     .split(shell);
 
@@ -132,10 +133,33 @@ fn render_input_block(frame: &mut Frame, area: Rect, state: &AppState, palette: 
     ])
     .split(area);
 
-    render_rule(frame, chunks[0], palette);
+    render_top_rule(frame, chunks[0], state, palette);
     render_input(frame, chunks[1], state, palette);
     render_rule(frame, chunks[2], palette);
     render_runtime_line(frame, chunks[3], state, palette);
+}
+
+fn render_top_rule(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    let label = " prompt ";
+    let status = format!(" {} ", session_state_label(state.session.phase));
+    let width = area.width as usize;
+    let used = label.chars().count() + status.chars().count();
+    let fill = width.saturating_sub(used);
+    let left_fill = fill / 2;
+    let right_fill = fill.saturating_sub(left_fill);
+
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(symbols::H.repeat(left_fill), palette.rail()),
+            Span::styled(label, palette.rail_glow()),
+            Span::styled(symbols::H.repeat(right_fill), palette.rail()),
+            Span::styled(status, session_status_style(state.session.phase, palette)),
+        ])),
+        area,
+    );
 }
 
 fn render_rule(frame: &mut Frame, area: Rect, palette: ThemePalette) {
@@ -144,8 +168,8 @@ fn render_rule(frame: &mut Frame, area: Rect, palette: ThemePalette) {
     }
     frame.render_widget(
         Paragraph::new(Line::styled(
-            "─".repeat(area.width as usize),
-            palette.border(),
+            symbols::H.repeat(area.width as usize),
+            palette.rail(),
         )),
         area,
     );
@@ -155,28 +179,78 @@ fn render_runtime_line(frame: &mut Frame, area: Rect, state: &AppState, palette:
     if area.width == 0 || area.height == 0 {
         return;
     }
-    let status = session_state_label(state.session.phase);
-    let help = if state.session.phase == SessionPhase::AwaitingConfirmation {
-        "↑↓ choose  Enter confirm  Esc decline  ? help"
+    let mut spans = vec![
+        pill(
+            provider_label(&state.config.provider),
+            palette.provider(&state.config.provider),
+        ),
+        separator(palette),
+        pill(&state.current_plan.model, palette.text()),
+        separator(palette),
+        pill(
+            &state.current_plan.reasoning,
+            reasoning_style(&state.current_plan.reasoning, palette),
+        ),
+        separator(palette),
+        Span::styled("profile ", palette.dim()),
+        Span::styled(state.current_plan.profile.clone(), palette.accent().bold()),
+        separator(palette),
+    ];
+
+    if state.session.phase == SessionPhase::AwaitingConfirmation {
+        spans.extend([
+            Span::styled(symbols::ARROWS, palette.accent().bold()),
+            Span::styled(" choose", palette.muted()),
+            separator(palette),
+            Span::styled("Enter", palette.text().bold()),
+            Span::styled(" confirm", palette.muted()),
+            separator(palette),
+            Span::styled("Esc", palette.text().bold()),
+            Span::styled(" decline", palette.muted()),
+            separator(palette),
+            Span::styled("? help", palette.muted()),
+        ]);
     } else {
-        "Enter send  / commands  ? help  Esc back"
-    };
-    let line = format!(
-        "{}  {}  {}  profile {}  {}   {}",
-        provider_label(&state.config.provider),
-        state.current_plan.model,
-        state.current_plan.reasoning,
-        state.current_plan.profile,
-        status,
-        help
-    );
-    frame.render_widget(
-        Paragraph::new(Line::styled(
-            truncate_to_width(&line, area.width as usize),
-            palette.muted(),
-        )),
-        area,
-    );
+        spans.extend([
+            Span::styled("Enter", palette.text().bold()),
+            Span::styled(" send", palette.muted()),
+            separator(palette),
+            Span::styled("/", palette.text().bold()),
+            Span::styled(" commands", palette.muted()),
+            separator(palette),
+            Span::styled("? help", palette.muted()),
+            separator(palette),
+            Span::styled("Esc back", palette.muted()),
+        ]);
+    }
+
+    frame.render_widget(Paragraph::new(Line::from(spans)), area);
+}
+
+fn pill(value: &str, style: Style) -> Span<'static> {
+    Span::styled(format!(" {value} "), style)
+}
+
+fn separator(palette: ThemePalette) -> Span<'static> {
+    Span::styled(format!(" {} ", symbols::SEP), palette.dim())
+}
+
+fn reasoning_style(reasoning: &str, palette: ThemePalette) -> Style {
+    match reasoning {
+        "high" | "xhigh" => palette.warning().bold(),
+        "low" => palette.muted(),
+        _ => palette.text(),
+    }
+}
+
+fn session_status_style(phase: SessionPhase, palette: ThemePalette) -> Style {
+    match phase {
+        SessionPhase::Idle => palette.muted(),
+        SessionPhase::Running => palette.cyan().bold(),
+        SessionPhase::AwaitingConfirmation => palette.warning().bold(),
+        SessionPhase::Cancelled => palette.error().bold(),
+        SessionPhase::Ready => palette.success().bold(),
+    }
 }
 
 fn session_state_label(phase: SessionPhase) -> &'static str {
@@ -195,26 +269,6 @@ fn provider_label(value: &str) -> &str {
         "Claude Code" => "Claude",
         other => other,
     }
-}
-
-fn truncate_to_width(value: &str, max: usize) -> String {
-    use unicode_width::UnicodeWidthStr;
-
-    if UnicodeWidthStr::width(value) <= max {
-        return value.to_string();
-    }
-    let mut out = String::new();
-    let mut width = 0;
-    for ch in value.chars() {
-        let ch_width = UnicodeWidthStr::width(ch.to_string().as_str());
-        if width + ch_width + 3 > max {
-            break;
-        }
-        out.push(ch);
-        width += ch_width;
-    }
-    out.push_str("...");
-    out
 }
 
 fn safe_rect(area: Rect, bounds: Rect) -> Rect {

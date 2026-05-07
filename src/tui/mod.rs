@@ -6,6 +6,7 @@ pub mod render;
 mod screens;
 pub mod session;
 pub mod state;
+pub mod symbols;
 pub mod theme;
 mod widgets;
 

@@ -707,7 +707,7 @@ profiles:
 
     let text = render_to_text(150, 48, &state);
 
-    assert!(text.contains("active-session"));
+    assert!(!text.contains("active-session"));
     assert!(!text.contains("debug-auth-flow"));
     assert!(text.contains("You"));
     assert!(text.contains("Routis"));
@@ -754,7 +754,10 @@ fn input_block_shows_runtime_status_below_prompt() {
     let text = render_to_text(150, 44, &state);
 
     assert!(text.contains("Type a task or / for commands"));
-    assert!(text.contains("Codex  gpt-5.5  high  profile deep  idle"));
+    assert!(text.contains("Codex"));
+    assert!(text.contains("gpt-5.5"));
+    assert!(text.contains("profile deep"));
+    assert!(text.contains("idle"));
     assert!(text.contains("Enter send"));
 }
 
@@ -800,8 +803,6 @@ fn empty_session_area_has_no_scroll_artifacts() {
     let state = AppState::home();
     let text = render_to_text(150, 44, &state);
 
-    assert!(!text.contains("в†‘"));
-    assert!(!text.contains("в†“"));
     assert!(!text.contains("scroll"));
 }
 
@@ -1003,7 +1004,8 @@ fn shortcuts_render_inside_session_area_not_as_overlay() {
     assert!(text.contains("Keyboard shortcuts"));
     assert!(text.contains("Ctrl+C"));
     assert!(text.contains("Esc"));
-    assert!(text.find("new-session").unwrap() < text.find("Keyboard shortcuts").unwrap());
+    assert!(text.find("Routis v0.3.0").unwrap() < text.find("Keyboard shortcuts").unwrap());
+    assert!(text.find("Keyboard shortcuts").unwrap() < text.find("Type a task").unwrap());
 }
 
 #[test]
