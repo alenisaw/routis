@@ -1293,7 +1293,7 @@ dependencies = [
 
 [[package]]
 name = "routis-context"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "routis-core",
  "serde",
@@ -1303,7 +1303,7 @@ dependencies = [
 
 [[package]]
 name = "routis-core"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "thiserror 1.0.69",
@@ -1311,7 +1311,7 @@ dependencies = [
 
 [[package]]
 name = "routis-policy"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "routis-core",
  "serde",
