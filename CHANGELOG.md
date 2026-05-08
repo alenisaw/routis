@@ -15,7 +15,7 @@ This release adds repo-aware routing, route previews, local sessions, and a clea
 
 - Made automatic routing repo-aware, including policy rules for high-risk paths and README caps.
 - Reworked the TUI shell around prompt-first planning, confirmation choices, runtime context, Activity Tracker, and slower Routis output animation.
-- Moved runtime config, history, sessions, and default policies into project-local `.routis`.
+- Moved runtime config, history, sessions, and default policies into install-local `.routis`.
 - Updated `/status`, `/context`, task planning events, and `/sessions` around the new repo/session context.
 
 ### Quality

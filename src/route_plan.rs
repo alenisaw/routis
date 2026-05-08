@@ -76,6 +76,7 @@ pub fn load_policy(policy_path: &str, repo_root: Option<&Path>) -> Result<Loaded
         requested
     };
     let path = PathBuf::from(requested);
+    let is_default_policy = requested.replace('\\', "/") == DEFAULT_POLICY_PATH;
 
     if path.is_absolute() {
         let policy = PolicyFile::load(&path)
@@ -83,6 +84,23 @@ pub fn load_policy(policy_path: &str, repo_root: Option<&Path>) -> Result<Loaded
         return Ok(LoadedPolicy {
             policy,
             source: path.display().to_string(),
+        });
+    }
+
+    if is_default_policy {
+        let installed = crate::paths::default_policy_path();
+        if installed.exists() {
+            let policy = PolicyFile::load(&installed)
+                .with_context(|| format!("failed to load policy file `{}`", installed.display()))?;
+            return Ok(LoadedPolicy {
+                policy,
+                source: installed.display().to_string(),
+            });
+        }
+        let policy = PolicyFile::parse_yaml(DEFAULT_POLICY_YAML, "embedded default policy")?;
+        return Ok(LoadedPolicy {
+            policy,
+            source: "embedded default policy".to_string(),
         });
     }
 
@@ -98,23 +116,10 @@ pub fn load_policy(policy_path: &str, repo_root: Option<&Path>) -> Result<Loaded
                     });
                 }
                 Err(error) => {
-                    if requested.replace('\\', "/") == DEFAULT_POLICY_PATH {
-                        return Err(error).with_context(|| {
-                            format!("failed to load policy file `{}`", rooted.display())
-                        });
-                    }
                     rooted_error = Some((rooted, error));
                 }
             }
         }
-    }
-
-    if requested.replace('\\', "/") == DEFAULT_POLICY_PATH {
-        let policy = PolicyFile::parse_yaml(DEFAULT_POLICY_YAML, "embedded default policy")?;
-        return Ok(LoadedPolicy {
-            policy,
-            source: "embedded default policy".to_string(),
-        });
     }
 
     let policy = PolicyFile::load(&path).with_context(|| {
@@ -268,14 +273,17 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn rooted_default_policy_error_is_not_masked_by_embedded_fallback() {
+    fn installed_default_policy_error_is_not_masked_by_embedded_fallback() {
         let dir = TempDir::new().unwrap();
-        let policy_dir = dir.path().join(".routis").join("policies");
+        let routis_home = dir.path().join("routis-home");
+        let policy_dir = routis_home.join("policies");
         fs::create_dir_all(&policy_dir).unwrap();
         let policy_path = policy_dir.join("default.yaml");
         fs::write(&policy_path, "version: [").unwrap();
 
+        std::env::set_var("ROUTIS_HOME", &routis_home);
         let error = load_policy(DEFAULT_POLICY_PATH, Some(dir.path())).unwrap_err();
+        std::env::remove_var("ROUTIS_HOME");
         let message = format!("{error:#}");
 
         assert!(message.contains("failed to load policy file"));

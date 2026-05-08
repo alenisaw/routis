@@ -3,23 +3,13 @@ use anyhow::{Context, Result};
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 const DEFAULT_POLICY_YAML: &str = include_str!("../../configs/policies/default.yaml");
 
 #[must_use]
 pub fn routis_dir() -> PathBuf {
-    if let Some(path) = std::env::var_os("ROUTIS_HOME") {
-        return PathBuf::from(path);
-    }
-    if let Ok(cwd) = std::env::current_dir() {
-        if let Some(root) = discover_repo_root(&cwd) {
-            return root.join(".routis");
-        }
-        return cwd.join(".routis");
-    }
-    PathBuf::from(".routis")
+    crate::paths::routis_dir()
 }
 
 #[must_use]
@@ -57,19 +47,6 @@ fn ensure_default_policy(routis_dir: &Path) -> Result<()> {
     }
     fs::write(&path, DEFAULT_POLICY_YAML)
         .with_context(|| format!("failed to write default policy `{}`", path.display()))
-}
-
-fn discover_repo_root(cwd: &Path) -> Option<PathBuf> {
-    let output = Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
-        .current_dir(cwd)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let root = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    (!root.is_empty()).then(|| PathBuf::from(root))
 }
 
 fn parse_config(raw: &str) -> ConfigState {
