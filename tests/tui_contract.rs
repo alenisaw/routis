@@ -65,10 +65,10 @@ fn setup_screen_uses_left_mascot_right_copy_and_no_outer_frame() {
     assert!(text.contains("3  Exit"));
     assert!(text.contains("\u{2584}\u{2584}"));
     assert!(text.contains("\u{00b7} \u{00b7} \u{00b7}"));
-    assert!(!text.contains("в•­"));
-    assert!(!text.contains("в•®"));
-    assert!(!text.contains("в•°"));
-    assert!(!text.contains("в•Ї"));
+    assert!(!text.contains('\u{256d}'));
+    assert!(!text.contains('\u{256e}'));
+    assert!(!text.contains('\u{2570}'));
+    assert!(!text.contains('\u{256f}'));
     assert!(!text.contains("security policy"));
     assert!(!text.contains("security-strict"));
 }
