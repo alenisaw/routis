@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 - Repo Context and Session Store - 2026-05-05
+## 0.3.0 - Repo Context and Session Store - 2026-05-08
 
 This release adds repo-aware routing, route previews, local sessions, and a cleaner TUI shell.
 
