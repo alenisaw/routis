@@ -1,4 +1,4 @@
-﻿use assert_cmd::Command;
+use assert_cmd::Command;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use predicates::prelude::*;
 use ratatui::{backend::TestBackend, style::Color, Terminal};
@@ -325,18 +325,18 @@ fn context_command_records_repo_context_block() {
 #[test]
 fn policy_file_command_updates_tui_config() {
     let mut state = AppState::home();
-    state.ui.input = "/policy-file configs/policies/default.yaml".to_string();
+    state.ui.input = "/policy-file .routis/policies/default.yaml".to_string();
 
     handle_key_for_test(
         &mut state,
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
     );
 
-    assert_eq!(state.config.policy_file, "configs/policies/default.yaml");
+    assert_eq!(state.config.policy_file, ".routis/policies/default.yaml");
     assert!(state.session.events.iter().any(|event| event
         .lines
         .iter()
-        .any(|line| line.contains("policy file: configs/policies/default.yaml"))));
+        .any(|line| line.contains("policy file: .routis/policies/default.yaml"))));
 }
 
 #[test]
@@ -1000,13 +1000,11 @@ fn every_slash_command_records_a_session_result() {
 #[test]
 fn shortcuts_render_inside_session_area_not_as_overlay() {
     let mut state = AppState::home();
-    handle_key_for_test(
-        &mut state,
-        KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE),
-    );
+    handle_key_for_test(&mut state, KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE));
     let text = render_to_text(150, 44, &state);
 
     assert!(text.contains("Keyboard shortcuts"));
+    assert!(text.contains("F1"));
     assert!(text.contains("Ctrl+C"));
     assert!(text.contains("Esc"));
     assert!(text.find("Routis v0.3.0").unwrap() < text.find("Keyboard shortcuts").unwrap());

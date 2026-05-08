@@ -76,7 +76,7 @@ fn handle_key(state: &mut AppState, key: KeyEvent, history: &mut ShellHistory) -
         _ => {}
     }
 
-    if key.code == KeyCode::Char('?') {
+    if key.code == KeyCode::F(1) {
         state.ui.shortcuts_open = !state.ui.shortcuts_open;
         return Ok(false);
     }
@@ -698,7 +698,7 @@ fn apply_command(
                 .input
                 .split_whitespace()
                 .nth(1)
-                .unwrap_or("configs/policies/default.yaml")
+                .unwrap_or(crate::route_plan::DEFAULT_POLICY_PATH)
                 .to_string();
             let repo_root = std::env::current_dir()
                 .ok()

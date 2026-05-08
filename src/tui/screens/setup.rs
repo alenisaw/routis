@@ -170,7 +170,7 @@ fn step_copy(step: SetupStep) -> (&'static str, [&'static str; 2]) {
             "What this setup does",
             [
                 "Routis routes AI coding tasks locally through your chosen CLI.",
-                "This wizard writes only ~/.routis/config.toml.",
+                "This wizard writes only .routis/config.toml in this workspace.",
             ],
         ),
         SetupStep::Name => (
@@ -245,7 +245,7 @@ fn render_setup_choices(frame: &mut Frame, area: Rect, state: &AppState, palette
                 ),
                 selectable(
                     "2  Import config",
-                    "load existing ~/.routis/config.toml",
+                    "load existing .routis/config.toml",
                     state.setup.selected == 1,
                     palette,
                 ),

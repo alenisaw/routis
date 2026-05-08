@@ -15,6 +15,7 @@ This release adds repo-aware routing, route previews, local sessions, and a clea
 
 - Made automatic routing repo-aware, including policy rules for high-risk paths and README caps.
 - Reworked the TUI shell around prompt-first planning, confirmation choices, runtime context, Activity Tracker, and slower Routis output animation.
+- Moved runtime config, history, sessions, and default policies into project-local `.routis`.
 - Updated `/status`, `/context`, task planning events, and `/sessions` around the new repo/session context.
 
 ### Quality
@@ -55,13 +56,13 @@ This release adds the first Routis terminal UI shell while keeping the 0.1.0 one
 
 - Added a full interactive TUI shell that starts when `routis` is run without a task.
 - Added the main TUI workspace: dashboard header, recent updates, recent sessions, provider/model/reasoning summary, metrics, timeline, input row, and status badge.
-- Added first-run setup for local display name, provider selection, Codex CLI check, theme selection, review, and config saving to `~/.routis/config.toml`.
+- Added first-run setup for local display name, provider selection, Codex CLI check, theme selection, review, and config saving to `.routis/config.toml`.
 - Added keyboard-driven command handling for `/help`, `/status`, `/setup`, `/doctor`, `/provider`, `/theme`, `/sessions`, `/history`, `/clear`, `/config`, and `/quit`.
 - Added an inline command palette with live filtering while typing slash commands.
 - Added a dedicated sessions window with searchable local prompt history and keyboard selection.
 - Added dedicated theme and provider picker windows outside setup, so theme/provider changes can be made from the shell.
 - Added Codex provider diagnostics that search the system PATH, resolve a runnable Codex executable, show binary/version/auth/config information, and run `codex --version`.
-- Added local shell history storage under `~/.routis/shell_history` and recent-session titles derived from prompts.
+- Added local shell history storage under `.routis/shell_history` and recent-session titles derived from prompts.
 - Added TUI timeline events for command results, task previews, confirmation prompts, cancellation, and cleared views.
 - Added confirmation flow for prepared tasks with `proceed`, `edit`, and `cancel`.
 - Added responsive terminal layouts for minimal, compact, and wide widths.
@@ -103,11 +104,11 @@ Routis starts as a focused Rust command-line tool for routing AI coding tasks be
 - `routis "fix typo in README"` routes a positional task.
 - `routis --task "debug auth flow"` routes a task passed by flag.
 - `routis --policy deep "debug auth flow"` forces a profile.
-- `routis --policy-file ./configs/policies/default.yaml "update config loader"` loads a custom execution policy.
+- `routis --policy-file ./.routis/policies/default.yaml "update config loader"` loads a custom execution policy.
 
 ### Policy
 
-- Added `configs/policies/default.yaml`.
+- Added `.routis/policies/default.yaml`.
 - Moved profile-to-model and profile-to-reasoning mappings out of Rust code.
 - Added validation for missing profile configuration, empty policy fields, unsupported policy versions, and unknown YAML fields.
 

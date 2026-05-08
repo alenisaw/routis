@@ -51,7 +51,7 @@ fn run_route(task: Vec<String>) -> Result<()> {
     }
     let plan = routis::route_plan::build_execution_plan(
         task,
-        "configs/policies/default.yaml",
+        routis::route_plan::DEFAULT_POLICY_PATH,
         std::env::current_dir()?,
     )?;
     println!("task: {task}");

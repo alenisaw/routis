@@ -100,7 +100,7 @@ pub const COMMANDS: [CommandSpec; 14] = [
     CommandSpec {
         name: "/help",
         description: "show commands and shortcuts",
-        shortcut: "?",
+        shortcut: "F1",
         command: SlashCommand::Help,
     },
     CommandSpec {

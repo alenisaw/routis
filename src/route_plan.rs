@@ -7,7 +7,7 @@ use std::{
     process::Command,
 };
 
-const DEFAULT_POLICY_PATH: &str = "configs/policies/default.yaml";
+pub const DEFAULT_POLICY_PATH: &str = ".routis/policies/default.yaml";
 const DEFAULT_POLICY_YAML: &str = include_str!("../configs/policies/default.yaml");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,20 +89,22 @@ pub fn load_policy(policy_path: &str, repo_root: Option<&Path>) -> Result<Loaded
     let mut rooted_error = None;
     if let Some(root) = repo_root {
         let rooted = root.join(&path);
-        match PolicyFile::load(&rooted) {
-            Ok(policy) => {
-                return Ok(LoadedPolicy {
-                    policy,
-                    source: rooted.display().to_string(),
-                });
-            }
-            Err(error) => {
-                if requested.replace('\\', "/") == DEFAULT_POLICY_PATH {
-                    return Err(error).with_context(|| {
-                        format!("failed to load policy file `{}`", rooted.display())
+        if rooted.exists() {
+            match PolicyFile::load(&rooted) {
+                Ok(policy) => {
+                    return Ok(LoadedPolicy {
+                        policy,
+                        source: rooted.display().to_string(),
                     });
                 }
-                rooted_error = Some((rooted, error));
+                Err(error) => {
+                    if requested.replace('\\', "/") == DEFAULT_POLICY_PATH {
+                        return Err(error).with_context(|| {
+                            format!("failed to load policy file `{}`", rooted.display())
+                        });
+                    }
+                    rooted_error = Some((rooted, error));
+                }
             }
         }
     }
@@ -268,7 +270,7 @@ mod tests {
     #[test]
     fn rooted_default_policy_error_is_not_masked_by_embedded_fallback() {
         let dir = TempDir::new().unwrap();
-        let policy_dir = dir.path().join("configs").join("policies");
+        let policy_dir = dir.path().join(".routis").join("policies");
         fs::create_dir_all(&policy_dir).unwrap();
         let policy_path = policy_dir.join("default.yaml");
         fs::write(&policy_path, "version: [").unwrap();

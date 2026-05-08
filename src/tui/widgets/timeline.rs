@@ -141,7 +141,7 @@ fn shortcut_lines(palette: ThemePalette) -> Vec<Line<'static>> {
         ),
         shortcut_line("Ctrl+C", "cancel task or clear input", false, palette),
         shortcut_line("Ctrl+D", "exit Routis", false, palette),
-        shortcut_line("?", "close this help", true, palette),
+        shortcut_line("F1", "close this help", true, palette),
     ]
 }
 

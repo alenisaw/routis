@@ -75,7 +75,7 @@ impl Default for ConfigState {
             model: "gpt-5.5".to_string(),
             reasoning: "medium".to_string(),
             theme: "Routis Cyan".to_string(),
-            policy_file: "configs/policies/default.yaml".to_string(),
+            policy_file: crate::route_plan::DEFAULT_POLICY_PATH.to_string(),
         }
     }
 }

@@ -131,7 +131,7 @@ Useful TUI keys:
 | `Esc` | Close the current palette, picker, or session view |
 | `Ctrl+C` | Cancel the current task or clear input |
 | `Ctrl+D` | Exit Routis |
-| `?` | Toggle keyboard shortcuts |
+| `F1` | Toggle keyboard shortcuts |
 
 Useful TUI commands:
 
@@ -160,7 +160,7 @@ routis
 
 Enter a task in the input row. Routis plans locally, shows the prompt, provider, model and reasoning, selected area, branch, changed file count, and confidence, then waits for `proceed`, `edit`, or `cancel`.
 
-The TUI stores local config under `~/.routis/config.toml`, recent prompt history under `~/.routis/shell_history`, and route sessions under `~/.routis/sessions`. Provider diagnostics locate `codex` from the system PATH and run `codex --version`; on Windows, Routis prefers executable shims such as `.cmd` or `.exe` over blocked PowerShell scripts.
+The TUI stores local config under `.routis/config.toml`, recent prompt history under `.routis/shell_history`, route sessions under `.routis/sessions`, and default policies under `.routis/policies`. In a Git repository this directory is created at the repository root; outside Git it is created in the current working directory. Provider diagnostics locate `codex` from the system PATH and run `codex --version`; on Windows, Routis prefers executable shims such as `.cmd` or `.exe` over blocked PowerShell scripts.
 
 ## Command Reference
 
@@ -178,7 +178,7 @@ Commands:
 
 ## Policy File
 
-Default policy file: `configs/policies/default.yaml`.
+Default policy file: `.routis/policies/default.yaml`.
 
 ```yaml
 version: 1
