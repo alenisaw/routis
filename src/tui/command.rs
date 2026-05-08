@@ -8,6 +8,9 @@ pub enum SlashCommand {
     Theme,
     Doctor,
     Clear,
+    Context,
+    Route,
+    PolicyFile,
     History,
     Sessions,
     Quit,
@@ -21,7 +24,7 @@ pub struct CommandSpec {
     pub command: SlashCommand,
 }
 
-pub const COMMANDS: [CommandSpec; 11] = [
+pub const COMMANDS: [CommandSpec; 14] = [
     CommandSpec {
         name: "/status",
         description: "show current provider and shell state",
@@ -53,6 +56,24 @@ pub const COMMANDS: [CommandSpec; 11] = [
         command: SlashCommand::History,
     },
     CommandSpec {
+        name: "/context",
+        description: "show repository branch, changed files, and area",
+        shortcut: "",
+        command: SlashCommand::Context,
+    },
+    CommandSpec {
+        name: "/route",
+        description: "preview route decision without execution",
+        shortcut: "",
+        command: SlashCommand::Route,
+    },
+    CommandSpec {
+        name: "/policy-file",
+        description: "set the routing policy file for this shell",
+        shortcut: "",
+        command: SlashCommand::PolicyFile,
+    },
+    CommandSpec {
         name: "/sessions",
         description: "resume a previous session",
         shortcut: "",
@@ -79,7 +100,7 @@ pub const COMMANDS: [CommandSpec; 11] = [
     CommandSpec {
         name: "/help",
         description: "show commands and shortcuts",
-        shortcut: "?",
+        shortcut: "F1",
         command: SlashCommand::Help,
     },
     CommandSpec {

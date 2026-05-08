@@ -16,3 +16,19 @@ profiles:
   extradeep:
     model: gpt-5.5
     reasoning: xhigh
+
+rules:
+  - if_risk_zone: auth
+    min_profile: deep
+
+  - if_risk_zone: schema
+    min_profile: deep
+
+  - if_risk_zone: workflow
+    min_profile: deep
+
+  - if_risk_zone: package
+    min_profile: deep
+
+  - if_path: README.md
+    max_profile: cheap

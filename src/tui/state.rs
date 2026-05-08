@@ -64,6 +64,7 @@ pub struct ConfigState {
     pub model: String,
     pub reasoning: String,
     pub theme: String,
+    pub policy_file: String,
 }
 
 impl Default for ConfigState {
@@ -74,6 +75,7 @@ impl Default for ConfigState {
             model: "gpt-5.5".to_string(),
             reasoning: "medium".to_string(),
             theme: "Routis Cyan".to_string(),
+            policy_file: crate::route_plan::DEFAULT_POLICY_PATH.to_string(),
         }
     }
 }
@@ -84,6 +86,23 @@ pub struct ProviderDiagnostics {
     pub version: String,
     pub auth_status: String,
     pub config_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepoContextState {
+    pub branch: String,
+    pub changed_files: usize,
+    pub impact_area: String,
+}
+
+impl Default for RepoContextState {
+    fn default() -> Self {
+        Self {
+            branch: "-".to_string(),
+            changed_files: 0,
+            impact_area: "-".to_string(),
+        }
+    }
 }
 
 impl Default for ProviderDiagnostics {
@@ -153,6 +172,24 @@ pub enum SessionPhase {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConfirmationChoice {
+    Proceed,
+    Decline,
+}
+
+impl ConfirmationChoice {
+    pub const ALL: [Self; 2] = [Self::Proceed, Self::Decline];
+
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Proceed => "Proceed",
+            Self::Decline => "Decline",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaletteMode {
     Commands,
     Sessions,
@@ -212,6 +249,23 @@ pub struct MetricsState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CurrentPlanState {
+    pub profile: String,
+    pub model: String,
+    pub reasoning: String,
+}
+
+impl Default for CurrentPlanState {
+    fn default() -> Self {
+        Self {
+            profile: "default".to_string(),
+            model: "gpt-5.5".to_string(),
+            reasoning: "medium".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiState {
     pub input: String,
     pub status_line: String,
@@ -225,6 +279,7 @@ pub struct UiState {
     pub session_picker_query: String,
     pub history_cursor: Option<usize>,
     pub shortcuts_open: bool,
+    pub confirmation_index: usize,
 }
 
 impl Default for UiState {
@@ -242,6 +297,7 @@ impl Default for UiState {
             session_picker_query: String::new(),
             history_cursor: None,
             shortcuts_open: false,
+            confirmation_index: 0,
         }
     }
 }
@@ -252,6 +308,8 @@ pub struct AppState {
     pub setup: SetupState,
     pub config: ConfigState,
     pub provider_diagnostics: ProviderDiagnostics,
+    pub repo_context: RepoContextState,
+    pub current_plan: CurrentPlanState,
     pub session: SessionState,
     pub metrics: MetricsState,
     pub ui: UiState,
@@ -265,6 +323,8 @@ impl AppState {
             setup: SetupState::default(),
             config: ConfigState::default(),
             provider_diagnostics: detect_provider_diagnostics(),
+            repo_context: RepoContextState::default(),
+            current_plan: CurrentPlanState::default(),
             session: SessionState::default(),
             metrics: MetricsState::default(),
             ui: UiState::default(),
@@ -326,6 +386,7 @@ impl AppState {
 
     pub fn start_session(&mut self, task: &str, title: String) {
         let task = task.trim();
+        let plan = execution_plan(task, self);
         let mut events = std::mem::take(&mut self.session.events);
         self.mode = AppMode::Session;
         self.session.title = title;
@@ -342,8 +403,14 @@ impl AppState {
         self.metrics.input_tokens = estimate_input_tokens(task, &self.config);
         self.metrics.output_tokens = 0;
         self.metrics.total_tokens = self.metrics.input_tokens;
-        self.metrics.context_percent = 18;
-        self.metrics.saved_percent = 32;
+        self.metrics.context_percent = plan.context_percent;
+        self.metrics.saved_percent = plan.saved_percent;
+        self.repo_context.branch = plan.branch.clone();
+        self.repo_context.changed_files = plan.changed_files;
+        self.repo_context.impact_area = plan.impact_area.clone();
+        self.current_plan.profile = plan.profile.clone();
+        self.current_plan.model = plan.model.clone();
+        self.current_plan.reasoning = plan.reasoning.clone();
         events.extend([
             SessionEvent {
                 source: "You".to_string(),
@@ -354,21 +421,22 @@ impl AppState {
                 source: "Routis".to_string(),
                 title: "Preparing local execution plan".to_string(),
                 lines: vec![
-                    format!("Task: {task}"),
+                    format!("Prompt: \"{task}\""),
                     format!("Provider: {}", self.config.provider),
+                    format!("Model & reason: {} / {}", plan.model, plan.reasoning),
+                    format!("Repo: {} changed files", plan.changed_files),
                     format!(
-                        "Model: {}  reasoning: {}",
-                        self.config.model, self.config.reasoning
+                        "Route: selected {} / {} · scope {} · confidence {}",
+                        plan.profile, plan.area, plan.scope, plan.confidence
                     ),
-                    format!(
-                        "Command preview: codex exec -m {} --reasoning {} -- \"{}\"",
-                        self.config.model, self.config.reasoning, task
-                    ),
+                    format!("Area: {}", plan.area),
+                    format!("Policy: {}", plan.policy_source),
+                    format!("Reason: {}", plan.reason),
                 ],
             },
             SessionEvent {
                 source: "Codex CLI".to_string(),
-                title: "Ready to start when confirmed".to_string(),
+                title: "Choose whether to execute".to_string(),
                 lines: vec![
                     "provider binary checked".to_string(),
                     "local config path resolved".to_string(),
@@ -377,10 +445,15 @@ impl AppState {
             },
         ]);
         self.session.events = events;
-        self.session.visible_lines = self.session_total_render_lines();
+        self.session.visible_lines = if existing_lines == 0 {
+            4
+        } else {
+            self.session_total_render_lines()
+        };
         self.ui.input.clear();
         self.ui.command_palette_open = false;
         self.ui.shortcuts_open = false;
+        self.ui.confirmation_index = 0;
     }
 
     pub fn cancel_session(&mut self) {
@@ -399,15 +472,22 @@ impl AppState {
 
     pub fn tick(&mut self) {
         self.ui.frame = self.ui.frame.wrapping_add(1);
-        if self.mode != AppMode::Session || self.session.phase == SessionPhase::Idle {
-            return;
-        }
-        if self.session.phase == SessionPhase::Cancelled {
+        if self.mode != AppMode::Session
+            || matches!(
+                self.session.phase,
+                SessionPhase::Idle
+                    | SessionPhase::Cancelled
+                    | SessionPhase::Ready
+                    | SessionPhase::AwaitingConfirmation
+            )
+        {
             return;
         }
         let max_lines = self.session_total_render_lines();
         if self.session.visible_lines < max_lines {
-            self.session.visible_lines = (self.session.visible_lines + 2).min(max_lines);
+            if self.ui.frame.is_multiple_of(3) {
+                self.session.visible_lines = (self.session.visible_lines + 1).min(max_lines);
+            }
             self.session.phase = SessionPhase::Running;
         } else {
             self.session.phase = SessionPhase::AwaitingConfirmation;
@@ -445,6 +525,31 @@ impl AppState {
     }
 }
 
+fn execution_plan(task: &str, state: &AppState) -> crate::route_plan::ExecutionPlan {
+    crate::route_plan::build_execution_plan(
+        task,
+        &state.config.policy_file,
+        std::env::current_dir().unwrap_or_default(),
+    )
+    .unwrap_or_else(|_| crate::route_plan::ExecutionPlan {
+        profile: "balanced".to_string(),
+        model: "gpt-5.5".to_string(),
+        reasoning: "medium".to_string(),
+        branch: state.repo_context.branch.clone(),
+        changed_files: state.repo_context.changed_files,
+        impact_area: state.repo_context.impact_area.clone(),
+        intent: "unknown".to_string(),
+        area: "unknown".to_string(),
+        scope: "unknown".to_string(),
+        risk: "medium".to_string(),
+        confidence: "low".to_string(),
+        context_percent: state.metrics.context_percent,
+        saved_percent: state.metrics.saved_percent,
+        reason: "fallback plan after routing error".to_string(),
+        policy_source: "fallback".to_string(),
+    })
+}
+
 // ── Public name/index helpers ─────────────────────────────────────────────
 
 #[must_use]
@@ -467,13 +572,13 @@ pub fn reasoning_name(index: usize) -> &'static str {
     }
 }
 
-/// 5 themes: 0 = Routis Cyan, 1 = Routis Violet, 2 = Neon Magenta,
+/// 5 themes: 0 = Routis Cyan, 1 = Routis Violet, 2 = Soft Magenta,
 ///           3 = Midnight Blue, 4 = Monochrome.
 #[must_use]
 pub fn theme_name(index: usize) -> &'static str {
     match index {
         1 => "Routis Violet",
-        2 => "Neon Magenta",
+        2 => "Soft Magenta",
         3 => "Midnight Blue",
         4 => "Monochrome",
         _ => "Routis Cyan",

@@ -2,6 +2,7 @@ use crate::tui::{
     config::default_config_path,
     screens::home::{kv_line, sep_line, workspace_label},
     state::{AppState, SetupStep, THEME_MAX},
+    symbols,
     theme::ThemePalette,
     widgets::{dividers::h_rule, mascot::mascot_render_lines},
     APP_VERSION,
@@ -77,14 +78,17 @@ fn render_step_indicator(frame: &mut Frame, area: Rect, state: &AppState, palett
             } else {
                 palette.dim()
             };
-            spans.push(Span::styled("  ──  ", connector_style));
+            spans.push(Span::styled(
+                format!("  {}{}  ", symbols::H, symbols::H),
+                connector_style,
+            ));
         }
         let (dot, style) = if i < current {
-            ("✓", palette.success().bold())
+            ("+", palette.success().bold())
         } else if i == current {
-            ("●", palette.accent().bold())
+            ("*", palette.accent().bold())
         } else {
-            ("○", palette.dim())
+            ("o", palette.dim())
         };
         spans.push(Span::styled(format!("{dot} {}", step.label()), style));
     }
@@ -166,14 +170,14 @@ fn step_copy(step: SetupStep) -> (&'static str, [&'static str; 2]) {
             "What this setup does",
             [
                 "Routis routes AI coding tasks locally through your chosen CLI.",
-                "This wizard writes only ~/.routis/config.toml.",
+                "This wizard writes only to Routis install-local storage.",
             ],
         ),
         SetupStep::Name => (
             "Your Name",
             [
                 "Set the display name used in prompts and status lines.",
-                "Stored locally on this machine — editable any time.",
+                "Stored locally on this machine; editable any time.",
             ],
         ),
         SetupStep::Provider => (
@@ -204,11 +208,11 @@ fn step_list_line<'a>(step: SetupStep, current: SetupStep, palette: ThemePalette
     let idx = step.index();
     let cur = current.index();
     let (dot, label_style, value_style) = if idx < cur {
-        ("✓", palette.success(), palette.muted())
+        ("+", palette.success(), palette.muted())
     } else if idx == cur {
-        ("●", palette.accent().bold(), palette.text())
+        ("*", palette.accent().bold(), palette.text())
     } else {
-        ("○", palette.dim(), palette.dim())
+        ("o", palette.dim(), palette.dim())
     };
 
     Line::from(vec![
@@ -221,7 +225,7 @@ fn step_hint(step: SetupStep) -> &'static str {
     match step {
         SetupStep::Welcome => "start or import config",
         SetupStep::Name => "local display name",
-        SetupStep::Provider => "Codex CLI · Claude Code",
+        SetupStep::Provider => "Codex CLI / Claude Code",
         SetupStep::Theme => "5 palettes, live preview",
         SetupStep::Finish => "write config and launch",
     }
@@ -241,7 +245,7 @@ fn render_setup_choices(frame: &mut Frame, area: Rect, state: &AppState, palette
                 ),
                 selectable(
                     "2  Import config",
-                    "load existing ~/.routis/config.toml",
+                    "load existing install-local config.toml",
                     state.setup.selected == 1,
                     palette,
                 ),
@@ -272,65 +276,7 @@ fn render_setup_choices(frame: &mut Frame, area: Rect, state: &AppState, palette
             );
         }
 
-        SetupStep::Provider => frame.render_widget(
-            Paragraph::new(vec![
-                selectable(
-                    "1  Codex CLI",
-                    "recommended · OpenAI Codex",
-                    state.setup.provider_index == 0,
-                    palette,
-                ),
-                selectable(
-                    "2  Claude Code",
-                    "planned",
-                    state.setup.provider_index == 1,
-                    palette,
-                ),
-                selectable(
-                    "3  Custom OpenAI-compatible",
-                    "planned",
-                    state.setup.provider_index == 2,
-                    palette,
-                ),
-                Line::raw(""),
-                Line::styled("Provider check", palette.accent().bold()),
-                Line::styled(
-                    if !state.setup.provider_checked {
-                        "press Enter to run provider check"
-                    } else if state.provider_diagnostics.command == "Found" {
-                        "checked: press Enter again to continue"
-                    } else {
-                        "not found: fix PATH or install Codex CLI, then press Enter to check again"
-                    },
-                    if state.setup.provider_checked && state.provider_diagnostics.command == "Found"
-                    {
-                        palette.success()
-                    } else {
-                        palette.warning()
-                    },
-                ),
-                kv_line("binary", &state.provider_diagnostics.command, palette),
-                kv_line("version", &state.provider_diagnostics.version, palette),
-                kv_line("config", &state.provider_diagnostics.config_path, palette),
-                kv_line("auth", &state.provider_diagnostics.auth_status, palette),
-                Line::raw(""),
-                Line::styled(
-                    if state.setup.provider_checked && state.provider_diagnostics.command == "Found"
-                    {
-                        "✓  Codex CLI Found"
-                    } else {
-                        "✗  ERR Install Codex CLI, then run check again."
-                    },
-                    if state.setup.provider_checked && state.provider_diagnostics.command == "Found"
-                    {
-                        palette.success()
-                    } else {
-                        palette.warning()
-                    },
-                ),
-            ]),
-            area,
-        ),
+        SetupStep::Provider => render_provider_choices(frame, area, state, palette),
 
         SetupStep::Theme => {
             let mut theme_lines = vec![Line::styled("Colour themes", palette.accent().bold())];
@@ -394,13 +340,117 @@ fn render_setup_choices(frame: &mut Frame, area: Rect, state: &AppState, palette
     }
 }
 
+fn render_provider_choices(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
+    let rows = vec![
+        provider_row(
+            "1",
+            "Codex CLI",
+            provider_status(state),
+            state.setup.provider_index == 0,
+            palette,
+            area.width,
+        ),
+        provider_row(
+            "2",
+            "Claude Code",
+            "planned",
+            state.setup.provider_index == 1,
+            palette,
+            area.width,
+        ),
+        provider_row(
+            "3",
+            "Custom OpenAI-compatible",
+            "planned",
+            state.setup.provider_index == 2,
+            palette,
+            area.width,
+        ),
+        Line::raw(""),
+        Line::styled(
+            "Enter checks selected provider; arrows switch rows",
+            palette.muted(),
+        ),
+    ];
+    frame.render_widget(Paragraph::new(rows), area);
+}
+
+fn provider_status(state: &AppState) -> String {
+    if !state.setup.provider_checked {
+        return "press Enter to check".to_string();
+    }
+    if state.provider_diagnostics.command == "Found" {
+        format!("Found / {}", state.provider_diagnostics.version)
+    } else {
+        format!("Missing / {}", state.provider_diagnostics.auth_status)
+    }
+}
+
+fn provider_row(
+    index: &'static str,
+    label: &'static str,
+    status: impl ToString,
+    selected: bool,
+    palette: ThemePalette,
+    width: u16,
+) -> Line<'static> {
+    let status = truncate_width(
+        &status.to_string(),
+        (width as usize).saturating_sub(34).max(10),
+    );
+    let left = format!("{index}  {label}");
+    let gap = (width as usize)
+        .saturating_sub(
+            UnicodeWidthStr::width(left.as_str()) + UnicodeWidthStr::width(status.as_str()),
+        )
+        .max(2);
+    Line::from(vec![
+        Span::styled(
+            if selected { "> " } else { "  " },
+            if selected {
+                palette.accent().bold()
+            } else {
+                palette.dim()
+            },
+        ),
+        Span::styled(
+            left,
+            if selected {
+                palette.text().bold()
+            } else {
+                palette.text()
+            },
+        ),
+        Span::raw(" ".repeat(gap)),
+        Span::styled(status, palette.dim()),
+    ])
+}
+
+fn truncate_width(value: &str, max: usize) -> String {
+    if UnicodeWidthStr::width(value) <= max {
+        return value.to_string();
+    }
+    let mut out = String::new();
+    let mut width = 0;
+    for ch in value.chars() {
+        let ch_width = UnicodeWidthStr::width(ch.to_string().as_str());
+        if width + ch_width + 3 > max {
+            break;
+        }
+        out.push(ch);
+        width += ch_width;
+    }
+    out.push_str("...");
+    out
+}
+
 // ── Footer ────────────────────────────────────────────────────────────────
 
 fn render_setup_footer(frame: &mut Frame, area: Rect, palette: ThemePalette) {
     const KEYS: &[(&str, &str)] = &[
-        ("[↑↓]", "move"),
+        ("[up/down]", "move"),
         ("[1-5]", "pick"),
-        ("[Tab]", "next step"),
+        ("[left/right]", "step"),
         ("[Enter]", "confirm"),
         ("[Esc]", "back"),
     ];
@@ -458,7 +508,7 @@ fn label_for_theme(index: usize, name: &'static str) -> &'static str {
     match index {
         0 => "1  Routis Cyan",
         1 => "2  Routis Violet",
-        2 => "3  Neon Magenta",
+        2 => "3  Soft Magenta",
         3 => "4  Midnight Blue",
         4 => "5  Monochrome",
         _ => name,

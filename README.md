@@ -9,10 +9,14 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/alenisaw/routis/releases/latest"><img src="https://img.shields.io/github/v/release/alenisaw/routis?style=flat&label=release&color=58A6FF" alt="Release"></a>
   <a href="https://github.com/alenisaw/routis/stargazers"><img src="https://img.shields.io/github/stars/alenisaw/routis?style=flat&color=F4C430" alt="Stars"></a>
   <a href="https://github.com/alenisaw/routis/commits/main"><img src="https://img.shields.io/github/last-commit/alenisaw/routis?style=flat" alt="Last Commit"></a>
+</p>
+
+<p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/github/license/alenisaw/routis?style=flat&color=97CA00" alt="License"></a>
-  <a href="https://github.com/alenisaw/routis/actions"><img src="https://img.shields.io/github/actions/workflow/status/alenisaw/routis/ci.yml?branch=main&label=ci" alt="CI"></a>
+  <a href="https://github.com/alenisaw/routis/actions/workflows/ci.yml"><img src="https://github.com/alenisaw/routis/actions/workflows/ci.yml/badge.svg?branch=main&event=push" alt="CI"></a>
 </p>
 
 <p align="center">
@@ -28,7 +32,7 @@
 
 Routis is an execution-intelligence layer for AI coding workflows.
 
-It adds a deliberate routing step before execution. Given a task, Routis evaluates the request, applies local policy, selects an execution profile, prepares a Codex command preview, and explains why that route was chosen.
+It adds a deliberate routing step before execution. Given a task, Routis classifies the request, reads repository signals, applies local policy, selects an execution profile, and explains why that route was chosen.
 
 The point is simple: AI-assisted development should not use the same execution path for every task. Small edits should stay lightweight. Risky changes should receive stronger handling. Model choice, reasoning depth, and command shape should be explicit instead of hidden in shell habits.
 
@@ -51,7 +55,8 @@ Routis combines routing, context control, policy, explainability, and local reco
 | Capability | What it does |
 |---|---|
 | Adaptive routing | Selects a fitting execution profile for the task |
-| Context control | Uses repository signals without blindly loading everything |
+| Routing IR | Classifies English prompts by intent, area, scope, risk, confidence, and target hints |
+| Context control | Summarizes branch, changed files, manifests, docs, tests, workflows, and instruction files |
 | Risk detection | Recognizes sensitive zones such as config, auth, schema, workflow, and package files |
 | Policy control | Applies local routing rules and project-specific overrides |
 | Dry run | Shows the route and command preview before execution |
@@ -126,7 +131,7 @@ Useful TUI keys:
 | `Esc` | Close the current palette, picker, or session view |
 | `Ctrl+C` | Cancel the current task or clear input |
 | `Ctrl+D` | Exit Routis |
-| `?` | Toggle keyboard shortcuts |
+| `F1` | Toggle keyboard shortcuts |
 
 Useful TUI commands:
 
@@ -140,90 +145,40 @@ Useful TUI commands:
 | `/theme` | Open the theme picker with live preview |
 | `/sessions` | Open searchable recent-session selection |
 | `/history` | Show local history status |
+| `/context` | Show branch, changed files, area, and repo map markers |
+| `/route <task>` | Preview the selected route without executing |
+| `/policy-file <path>` | Set the routing policy file for this shell |
 | `/clear` | Clear the current TUI timeline |
 | `/config` | Show the local config path |
 | `/quit` | Exit Routis |
 
-Route a task automatically:
-
-```bash
-routis "fix typo in README"
-```
-
-Pass the task with a flag:
-
-```bash
-routis --task "debug auth flow"
-```
-
-Show routing details:
-
-```bash
-routis --task "debug auth flow" --explain
-```
-
-Force a profile:
-
-```bash
-routis --policy deep "debug failing config loader"
-```
-
-Use a policy file:
-
-```bash
-routis --policy-file ./configs/policies/default.yaml "update config loader"
-```
-
-Execute the generated Codex command:
-
-```bash
-routis --execute "implement config loader"
-```
-
-Without `--execute`, Routis stays in dry-run mode.
-
-Launch the v0.2.2 TUI:
+Launch the TUI:
 
 ```bash
 routis
 ```
 
-The TUI stores local config under `~/.routis/config.toml` and recent prompt history under `~/.routis/shell_history`. Provider diagnostics locate `codex` from the system PATH and run `codex --version`; on Windows, Routis prefers executable shims such as `.cmd` or `.exe` over blocked PowerShell scripts.
+Enter a task in the input row. Routis plans locally, shows the prompt, provider, model and reasoning, selected area, branch, changed file count, and confidence, then waits for `proceed`, `edit`, or `cancel`.
 
-## CLI Reference
+The TUI stores Routis runtime files next to the installed `routis` executable under `.routis`: config in `.routis/config.toml`, prompt history in `.routis/shell_history`, route sessions in `.routis/sessions`, and default policies in `.routis/policies`. Set `ROUTIS_HOME` to override this location. Provider diagnostics locate `codex` from the system PATH and run `codex --version`; on Windows, Routis prefers executable shims such as `.cmd` or `.exe` over blocked PowerShell scripts.
+
+## Command Reference
 
 ```text
-routis [OPTIONS] [TASK]...
-
-Arguments:
-  [TASK]...  Positional task text
+routis
 
 Options:
-      --task <TASK>         Task to route
-      --policy <POLICY>     Policy profile: cheap | balanced | deep | extradeep | default
-      --policy-file <PATH>  Load execution policy from a YAML file
-      --dry-run             Plan only, do not execute
-      --execute             Execute the planned Codex command
-      --explain             Show expanded routing detail
   -h, --help                Print help
   -V, --version             Print version
-```
 
-## Output Example
-
-```text
-Requested policy:  default
-Effective profile: deep
-Codex command:     codex exec -m gpt-5.5 --reasoning high -- "debug auth flow"
-Execution mode:    dry-run
-
-Signals matched:   ["debug"]
-Routing reason:    Auto-selected `deep` from signals: debug.
+Commands:
+  route <task>              Preview the selected route without opening the TUI
+  context                   Print the repository context summary
 ```
 
 ## Policy File
 
-Default policy file: `configs/policies/default.yaml`.
+Default policy file: the install-local `.routis/policies/default.yaml`.
 
 ```yaml
 version: 1
@@ -244,7 +199,21 @@ profiles:
   extradeep:
     model: gpt-5.5
     reasoning: xhigh
+
+rules:
+  - if_risk_zone: auth
+    min_profile: deep
+  - if_risk_zone: schema
+    min_profile: deep
+  - if_risk_zone: workflow
+    min_profile: deep
+  - if_risk_zone: package
+    min_profile: deep
+  - if_path: README.md
+    max_profile: cheap
 ```
+
+Policy rules apply to the automatic TUI route planner. A rule must define `if_risk_zone` or `if_path`; empty matchers are rejected.
 
 ## Development
 
@@ -260,8 +229,6 @@ cargo build --release
 Run locally:
 
 ```bash
-cargo run -- "fix typo in README"
-cargo run -- --explain "debug failing route selection"
 cargo run
 ```
 

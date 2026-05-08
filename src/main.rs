@@ -1,88 +1,92 @@
 #![forbid(unsafe_code)]
 #![deny(warnings)]
 
-use anyhow::{bail, Context, Result};
-use clap::Parser;
+use anyhow::Result;
+use clap::{Parser, Subcommand};
 use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use routis::tui::app::run_app;
-use routis_core::{route_task, Profile, RoutingDecision};
-use routis_policy::{build_codex_command, format_command, PolicyFile};
-use std::{path::PathBuf, process::Command, str::FromStr};
-
-const DEFAULT_POLICY_PATH: &str = "configs/policies/default.yaml";
 
 #[derive(Debug, Parser)]
 #[command(name = "routis")]
-#[command(version, about = "Policy-aware CLI for routing AI coding tasks.")]
+#[command(version, about = "Interactive TUI for routing AI coding tasks.")]
 struct Args {
-    /// Task to route.
-    #[arg(long)]
-    task: Option<String>,
+    /// Start the interactive TUI and exit immediately in smoke tests.
+    #[arg(long, hide = true)]
+    smoke: bool,
 
-    /// Policy profile: cheap | balanced | deep | extradeep | default.
-    #[arg(long, default_value = "default")]
-    policy: String,
+    #[command(subcommand)]
+    command: Option<Command>,
+}
 
-    /// Load execution policy from a YAML file.
-    #[arg(long = "policy-file", value_name = "PATH", default_value = DEFAULT_POLICY_PATH)]
-    policy_file: PathBuf,
-
-    /// Plan only, do not execute.
-    #[arg(long, conflicts_with = "execute")]
-    dry_run: bool,
-
-    /// Execute the planned Codex command.
-    #[arg(long, conflicts_with = "dry_run")]
-    execute: bool,
-
-    /// Show expanded routing detail.
-    #[arg(long)]
-    explain: bool,
-
-    /// Positional task text.
-    #[arg(value_name = "TASK")]
-    positional_task: Vec<String>,
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Preview the routing decision without provider execution.
+    Route {
+        /// Task to classify and route.
+        task: Vec<String>,
+    },
+    /// Print repository context summary.
+    Context,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
-    let Some(task) = resolve_task(&args)? else {
-        return run_tui().await;
-    };
-    let requested_profile = Profile::from_str(&args.policy)?;
-    let policy = PolicyFile::load(&args.policy_file).with_context(|| {
-        format!(
-            "failed to load policy file `{}`",
-            args.policy_file.display()
-        )
-    })?;
-    let decision = route_task(&task, requested_profile)?;
-    let codex_command = build_codex_command(&policy, decision.effective_profile, &task)?;
-    let execution_mode = match (args.execute, args.dry_run) {
-        (true, _) => "execute",
-        (false, true) | (false, false) => "dry-run",
-    };
-
-    print_decision(&decision, &codex_command, execution_mode, args.explain);
-
-    if args.execute {
-        execute_codex(&codex_command)?;
+    match args.command {
+        Some(Command::Route { task }) => run_route(task),
+        Some(Command::Context) => run_context(),
+        None => run_tui().await,
     }
+}
 
+fn run_route(task: Vec<String>) -> Result<()> {
+    let task = task.join(" ");
+    let task = task.trim();
+    if task.is_empty() {
+        anyhow::bail!("route task must not be empty");
+    }
+    let plan = routis::route_plan::build_execution_plan(
+        task,
+        routis::route_plan::DEFAULT_POLICY_PATH,
+        std::env::current_dir()?,
+    )?;
+    println!("task: {task}");
+    println!(
+        "selected: {} / {} / {}",
+        plan.profile, plan.model, plan.reasoning
+    );
+    println!("intent: {}", plan.intent);
+    println!("area: {}", plan.area);
+    println!("scope: {}", plan.scope);
+    println!("risk: {}", plan.risk);
+    println!("confidence: {}", plan.confidence);
+    println!("reason: {}", plan.reason);
     Ok(())
 }
 
-fn resolve_task(args: &Args) -> Result<Option<String>> {
-    match (&args.task, args.positional_task.is_empty()) {
-        (Some(_), false) => bail!("use either --task <TEXT> or positional TASK, not both"),
-        (Some(task), true) => Ok(Some(task.clone())),
-        (None, false) => Ok(Some(args.positional_task.join(" "))),
-        (None, true) => Ok(None),
+fn run_context() -> Result<()> {
+    let context = routis::route_plan::collect_repo_context_for_cwd(std::env::current_dir()?)?;
+    let summary = routis::route_plan::repo_map_summary(&context);
+    println!("branch: {}", summary.branch);
+    println!("changed files: {}", summary.changed_files);
+    println!("markers: {}", list(&summary.repo_markers));
+    println!("manifests: {}", list(&summary.manifests));
+    println!("docs: {}", list(&summary.docs));
+    println!("tests: {}", list(&summary.tests));
+    println!("workflows: {}", list(&summary.workflows));
+    println!("instructions: {}", list(&summary.instruction_files));
+    Ok(())
+}
+
+fn list(values: &[String]) -> String {
+    if values.is_empty() {
+        "-".to_string()
+    } else {
+        values.join(", ")
     }
 }
 
@@ -112,38 +116,4 @@ async fn run_tui() -> Result<()> {
     terminal.show_cursor()?;
 
     result
-}
-
-fn print_decision(
-    decision: &RoutingDecision,
-    codex_command: &[String],
-    execution_mode: &str,
-    explain: bool,
-) {
-    println!("Requested policy:  {}", decision.requested_profile);
-    println!("Effective profile: {}", decision.effective_profile);
-    println!("Codex command:     {}", format_command(codex_command));
-    println!("Execution mode:    {execution_mode}");
-
-    if explain {
-        println!();
-        println!("Signals matched:   {:?}", decision.signals_matched);
-        println!("Routing reason:    {}", decision.explain);
-    }
-}
-
-fn execute_codex(codex_command: &[String]) -> Result<()> {
-    let (program, args) = codex_command
-        .split_first()
-        .context("codex command is empty")?;
-
-    let status = Command::new(program).args(args).status().with_context(|| {
-        format!("failed to start `{program}`; is Codex CLI installed and on PATH?")
-    })?;
-
-    if !status.success() {
-        bail!("Codex command exited with status {status}");
-    }
-
-    Ok(())
 }

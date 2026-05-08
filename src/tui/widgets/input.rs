@@ -1,4 +1,7 @@
-use crate::tui::{state::AppState, theme::ThemePalette};
+use crate::tui::{
+    state::{AppState, ConfirmationChoice, SessionPhase},
+    theme::ThemePalette,
+};
 use ratatui::{
     layout::Rect,
     text::{Line, Span},
@@ -8,6 +11,29 @@ use ratatui::{
 use unicode_width::UnicodeWidthStr;
 
 pub fn render_input(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
+    if state.session.phase == SessionPhase::AwaitingConfirmation && state.ui.input.is_empty() {
+        let lines = ConfirmationChoice::ALL
+            .iter()
+            .enumerate()
+            .map(|(index, choice)| {
+                let selected = state.ui.confirmation_index == index;
+                let marker = if selected { ">" } else { " " };
+                let raw = format!("{marker} {}. {}", index + 1, choice.label());
+                let style = if selected {
+                    palette.warning().bold()
+                } else {
+                    palette.text()
+                };
+                Line::from(vec![Span::styled(
+                    clip_to_width(&raw, area.width as usize),
+                    style,
+                )])
+            })
+            .collect::<Vec<_>>();
+        frame.render_widget(Paragraph::new(lines), area);
+        return;
+    }
+
     let raw = if state.ui.input.is_empty() {
         "Type a task or / for commands...".to_string()
     } else {

@@ -5,13 +5,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
+const DEFAULT_POLICY_YAML: &str = include_str!("../../configs/policies/default.yaml");
+
 #[must_use]
 pub fn routis_dir() -> PathBuf {
-    if let Some(home) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
-        PathBuf::from(home).join(".routis")
-    } else {
-        PathBuf::from(".routis")
-    }
+    crate::paths::routis_dir()
 }
 
 #[must_use]
@@ -32,9 +30,23 @@ pub fn save_config(path: &Path, config: &ConfigState) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create `{}`", parent.display()))?;
+        ensure_default_policy(parent)?;
     }
     fs::write(path, serialize_config(config))
         .with_context(|| format!("failed to write config `{}`", path.display()))
+}
+
+fn ensure_default_policy(routis_dir: &Path) -> Result<()> {
+    let path = routis_dir.join("policies").join("default.yaml");
+    if path.exists() {
+        return Ok(());
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create `{}`", parent.display()))?;
+    }
+    fs::write(&path, DEFAULT_POLICY_YAML)
+        .with_context(|| format!("failed to write default policy `{}`", path.display()))
 }
 
 fn parse_config(raw: &str) -> ConfigState {
@@ -50,6 +62,7 @@ fn parse_config(raw: &str) -> ConfigState {
             "model" => config.model = value.to_string(),
             "reasoning" => config.reasoning = value.to_string(),
             "theme" => config.theme = value.to_string(),
+            "policy_file" => config.policy_file = value.to_string(),
             _ => {}
         }
     }
@@ -63,6 +76,7 @@ fn serialize_config(config: &ConfigState) -> String {
         format!("model={}", config.model),
         format!("reasoning={}", config.reasoning),
         format!("theme={}", config.theme),
+        format!("policy_file={}", config.policy_file),
     ]
     .join("\n")
 }

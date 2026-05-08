@@ -1,10 +1,11 @@
 use crate::tui::{
     state::{AppState, SessionPhase},
+    symbols,
     theme::ThemePalette,
 };
 use ratatui::{
     layout::Rect,
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Paragraph, Wrap},
     Frame,
@@ -15,24 +16,7 @@ pub fn render_timeline(frame: &mut Frame, area: Rect, state: &AppState, palette:
         return;
     }
 
-    let title = if state.session.current_task.is_empty() {
-        state.session.title.as_str()
-    } else {
-        "active-session"
-    };
-    let title_text = format!(" {title} ");
-    let (badge_text, badge_style) = phase_badge(state.session.phase, palette);
-    let inner_width = area.width as usize;
-    let title_len = title_text.chars().count();
-    let badge_len = badge_text.chars().count();
-    let gap = inner_width.saturating_sub(title_len + badge_len);
-    let title_line = Line::from(vec![
-        Span::styled(title_text, palette.muted()),
-        Span::styled(" ".repeat(gap), Style::default()),
-        Span::styled(badge_text, badge_style),
-    ]);
-
-    let mut lines: Vec<Line<'_>> = vec![title_line];
+    let mut lines: Vec<Line<'_>> = Vec::new();
 
     if state.ui.shortcuts_open {
         lines.extend(shortcut_lines(palette));
@@ -43,6 +27,7 @@ pub fn render_timeline(frame: &mut Frame, area: Rect, state: &AppState, palette:
                     role_prefix(&event.source),
                     role_style(&event.source, palette).bold(),
                 ),
+                Span::raw(" "),
                 Span::styled(
                     format!("{:<10}", &event.source),
                     role_style(&event.source, palette).bold(),
@@ -52,44 +37,38 @@ pub fn render_timeline(frame: &mut Frame, area: Rect, state: &AppState, palette:
 
             for (detail_index, detail) in event.lines.iter().enumerate() {
                 let branch = if detail_index + 1 == event.lines.len() {
-                    "   └─ "
+                    symbols::LAST
                 } else {
-                    "   ├─ "
+                    symbols::BRANCH
                 };
                 lines.push(Line::from(vec![
-                    Span::styled(branch, palette.dim()),
+                    Span::styled(format!("   {branch} "), palette.dim()),
                     Span::styled(detail, detail_style(detail, palette)),
                 ]));
             }
 
             if event_index + 1 < state.session.events.len() {
-                lines.push(Line::styled("   │", palette.dim()));
+                lines.push(Line::styled(format!("   {}", symbols::V), palette.dim()));
             }
         }
 
         lines.truncate(state.session.visible_lines.max(1).saturating_add(1));
 
-        // Animated phase indicator appended below visible events
         match state.session.phase {
-            SessionPhase::Running => lines.push(Line::from(vec![
-                Span::styled("   └─ ", palette.dim()),
-                Span::styled(spinner(state.ui.frame), palette.cyan().bold()),
-                Span::styled("  processing…", palette.muted()),
-            ])),
+            SessionPhase::Running => {
+                lines.extend(running_lines(state.ui.frame, area.width, palette));
+            }
             SessionPhase::AwaitingConfirmation => lines.push(Line::from(vec![
-                Span::styled("   └─ ", palette.dim()),
-                Span::styled(
-                    "◆  Awaiting confirmation — type 'proceed' or 'cancel'",
-                    palette.warning().bold(),
-                ),
+                Span::styled(format!("   {} ", symbols::LAST), palette.dim()),
+                Span::styled("Awaiting confirmation", palette.warning().bold()),
             ])),
             SessionPhase::Ready => lines.push(Line::from(vec![
-                Span::styled("   └─ ", palette.dim()),
-                Span::styled("✓  Confirmed — ready to execute", palette.success().bold()),
+                Span::styled(format!("   {} ", symbols::LAST), palette.dim()),
+                Span::styled("Confirmed - ready to execute", palette.success().bold()),
             ])),
             SessionPhase::Cancelled => lines.push(Line::from(vec![
-                Span::styled("   └─ ", palette.dim()),
-                Span::styled("✗  Session stopped", palette.error()),
+                Span::styled(format!("   {} ", symbols::LAST), palette.dim()),
+                Span::styled("Session stopped", palette.error()),
             ])),
             SessionPhase::Idle => {}
         }
@@ -110,31 +89,22 @@ pub fn render_timeline(frame: &mut Frame, area: Rect, state: &AppState, palette:
     );
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-fn phase_badge(phase: SessionPhase, palette: ThemePalette) -> (&'static str, Style) {
-    match phase {
-        SessionPhase::Running => (" RUNNING ", palette.badge_running()),
-        SessionPhase::AwaitingConfirmation => (" WAITING ", palette.badge_waiting()),
-        SessionPhase::Cancelled => (" STOPPED ", palette.badge_cancelled()),
-        SessionPhase::Ready => (" READY   ", palette.badge_ready()),
-        SessionPhase::Idle => (" IDLE    ", palette.badge_idle()),
-    }
-}
-
 fn role_prefix(source: &str) -> &'static str {
     match source {
-        "You" => "●  ",
-        s if s.contains("Codex") || s.contains("Claude") => "◆  ",
-        _ => "◇  ",
+        "You" => symbols::DOT,
+        s if s.contains("Codex") || s.contains("Claude") || s.contains("Qwen") => {
+            symbols::FILLED_DIAMOND
+        }
+        _ => symbols::DIAMOND,
     }
 }
 
 fn role_style(source: &str, palette: ThemePalette) -> Style {
     match source {
         "You" => palette.text(),
-        s if s.contains("Claude") => Style::default().fg(Color::Rgb(214, 132, 92)),
-        s if s.contains("Codex") => palette.text(),
+        s if s.contains("Codex") || s.contains("Claude") || s.contains("Qwen") => {
+            palette.provider(source)
+        }
         _ => palette.accent(),
     }
 }
@@ -144,8 +114,10 @@ fn detail_style(line: &str, palette: ThemePalette) -> Style {
         palette.warning()
     } else if line.contains("cancel") || line.contains("error") || line.contains("Error") {
         palette.error()
-    } else if line.contains("codex exec") || line.contains("Command preview") {
-        palette.cyan()
+    } else if line.starts_with("Prompt:") {
+        palette.cyan().italic()
+    } else if line.contains("Area:") {
+        palette.accent().bold()
     } else if line.contains("checked") || line.contains("resolved") || line.contains("Found") {
         palette.success()
     } else {
@@ -159,19 +131,58 @@ fn shortcut_lines(palette: ThemePalette) -> Vec<Line<'static>> {
             Span::styled("Routis  ", palette.accent().bold()),
             Span::styled("Keyboard shortcuts", palette.text().bold()),
         ]),
-        Line::styled("   ├─ Enter    send or confirm", palette.text()),
-        Line::styled("   ├─ /        open command palette", palette.text()),
-        Line::styled(
-            "   ├─ Esc      stop task, close palette, or go back",
-            palette.text(),
+        shortcut_line("Enter", "send or confirm", false, palette),
+        shortcut_line("/", "open command palette", false, palette),
+        shortcut_line(
+            "Esc",
+            "stop task, close palette, or go back",
+            false,
+            palette,
         ),
-        Line::styled("   ├─ Ctrl+C   cancel task or clear input", palette.text()),
-        Line::styled("   ├─ Ctrl+D   exit Routis", palette.text()),
-        Line::styled("   └─ ?        close this help", palette.text()),
+        shortcut_line("Ctrl+C", "cancel task or clear input", false, palette),
+        shortcut_line("Ctrl+D", "exit Routis", false, palette),
+        shortcut_line("F1", "close this help", true, palette),
     ]
 }
 
+fn shortcut_line(
+    key: &'static str,
+    label: &'static str,
+    last: bool,
+    palette: ThemePalette,
+) -> Line<'static> {
+    let branch = if last { symbols::LAST } else { symbols::BRANCH };
+    Line::from(vec![
+        Span::styled(format!("   {branch} "), palette.dim()),
+        Span::styled(format!("{key:<8}"), palette.text().bold()),
+        Span::styled(label, palette.text()),
+    ])
+}
+
+fn running_lines(frame: u64, width: u16, palette: ThemePalette) -> Vec<Line<'static>> {
+    let bar_width = (width as usize).saturating_sub(18).clamp(8, 28);
+    let head = (frame as usize) % bar_width;
+    let mut bar = String::with_capacity(bar_width);
+    for index in 0..bar_width {
+        let symbol = match index.abs_diff(head) {
+            0 => "#",
+            1 => "=",
+            2 => "-",
+            _ => ".",
+        };
+        bar.push_str(symbol);
+    }
+
+    vec![Line::from(vec![
+        Span::styled(format!("   {} ", symbols::LAST), palette.dim()),
+        Span::styled(spinner(frame), palette.cyan().bold()),
+        Span::raw("  "),
+        Span::styled(bar, palette.cyan()),
+        Span::styled("  planning", palette.muted()),
+    ])]
+}
+
 fn spinner(frame: u64) -> &'static str {
-    const FRAMES: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    const FRAMES: [&str; 4] = ["|", "/", "-", "\\"];
     FRAMES[(frame as usize) % FRAMES.len()]
 }

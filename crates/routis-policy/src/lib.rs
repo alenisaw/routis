@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 #![deny(warnings)]
 
-use routis_core::Profile;
+use routis_core::{Profile, RiskZone};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::Path};
 use thiserror::Error;
@@ -29,6 +29,8 @@ pub enum PolicyError {
         profile: String,
         field: &'static str,
     },
+    #[error("policy rule #{index} must define `if_risk_zone` or `if_path`")]
+    EmptyRuleMatcher { index: usize },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -36,6 +38,8 @@ pub enum PolicyError {
 pub struct PolicyFile {
     pub version: u32,
     pub profiles: BTreeMap<String, ProfileExecutionConfig>,
+    #[serde(default)]
+    pub rules: Vec<PolicyRule>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -43,6 +47,15 @@ pub struct PolicyFile {
 pub struct ProfileExecutionConfig {
     pub model: String,
     pub reasoning: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PolicyRule {
+    pub if_risk_zone: Option<RiskZone>,
+    pub if_path: Option<String>,
+    pub min_profile: Option<Profile>,
+    pub max_profile: Option<Profile>,
 }
 
 impl PolicyFile {
@@ -68,6 +81,12 @@ impl PolicyFile {
     pub fn validate(&self) -> Result<(), PolicyError> {
         if self.version != 1 {
             return Err(PolicyError::UnsupportedVersion(self.version));
+        }
+
+        for (index, rule) in self.rules.iter().enumerate() {
+            if rule.if_risk_zone.is_none() && rule.if_path.is_none() {
+                return Err(PolicyError::EmptyRuleMatcher { index: index + 1 });
+            }
         }
 
         for profile in [
@@ -126,6 +145,84 @@ pub fn build_codex_command(
 }
 
 #[must_use]
+pub fn apply_policy_rules(
+    policy: &PolicyFile,
+    profile: Profile,
+    risk_zones: &[RiskZone],
+    changed_files: &[std::path::PathBuf],
+) -> Profile {
+    policy.rules.iter().fold(profile, |current, rule| {
+        if !policy_rule_matches(rule, risk_zones, changed_files) {
+            return current;
+        }
+        let with_min = rule
+            .min_profile
+            .map_or(current, |min_profile| max_profile(current, min_profile));
+        rule.max_profile
+            .map_or(with_min, |max_profile| min_profile(with_min, max_profile))
+    })
+}
+
+fn policy_rule_matches(
+    rule: &PolicyRule,
+    risk_zones: &[RiskZone],
+    changed_files: &[std::path::PathBuf],
+) -> bool {
+    let risk_matches = rule
+        .if_risk_zone
+        .is_none_or(|zone| risk_zones.contains(&zone));
+    let path_matches = rule.if_path.as_ref().is_none_or(|pattern| {
+        let pattern = normalize_pattern(pattern);
+        if rule.max_profile.is_some() && rule.min_profile.is_none() {
+            !changed_files.is_empty()
+                && changed_files
+                    .iter()
+                    .all(|path| normalize_path(path).contains(&pattern))
+        } else {
+            changed_files
+                .iter()
+                .any(|path| normalize_path(path).contains(&pattern))
+        }
+    });
+    risk_matches && path_matches
+}
+
+fn normalize_path(path: &Path) -> String {
+    path.to_string_lossy()
+        .replace('\\', "/")
+        .to_ascii_lowercase()
+}
+
+fn normalize_pattern(pattern: &str) -> String {
+    pattern.replace('\\', "/").to_ascii_lowercase()
+}
+
+fn max_profile(left: Profile, right: Profile) -> Profile {
+    if profile_rank(left) >= profile_rank(right) {
+        left
+    } else {
+        right
+    }
+}
+
+fn min_profile(left: Profile, right: Profile) -> Profile {
+    if profile_rank(left) <= profile_rank(right) {
+        left
+    } else {
+        right
+    }
+}
+
+fn profile_rank(profile: Profile) -> u8 {
+    match profile {
+        Profile::Cheap => 0,
+        Profile::Balanced | Profile::Default => 1,
+        Profile::Deep => 2,
+        Profile::ExtraDeep => 3,
+    }
+}
+
+#[must_use]
 pub fn format_command(command: &[String]) -> String {
     command
         .iter()
@@ -180,6 +277,59 @@ profiles:
     }
 
     #[test]
+    fn parses_optional_routing_rules() {
+        let raw = format!(
+            r#"
+{POLICY}
+rules:
+  - if_risk_zone: auth
+    min_profile: deep
+  - if_path: README.md
+    max_profile: cheap
+"#
+        );
+
+        let policy = PolicyFile::parse_yaml(&raw, "test.yaml").unwrap();
+
+        assert_eq!(policy.rules.len(), 2);
+        assert_eq!(policy.rules[0].if_risk_zone, Some(RiskZone::Auth));
+        assert_eq!(policy.rules[0].min_profile, Some(Profile::Deep));
+        assert_eq!(policy.rules[1].if_path.as_deref(), Some("README.md"));
+        assert_eq!(policy.rules[1].max_profile, Some(Profile::Cheap));
+    }
+
+    #[test]
+    fn policy_rules_apply_min_and_max_profiles() {
+        let raw = format!(
+            r#"
+{POLICY}
+rules:
+  - if_risk_zone: auth
+    min_profile: deep
+  - if_path: README.md
+    max_profile: cheap
+"#
+        );
+        let policy = PolicyFile::parse_yaml(&raw, "test.yaml").unwrap();
+
+        let elevated = apply_policy_rules(
+            &policy,
+            Profile::Cheap,
+            &[RiskZone::Auth],
+            &[std::path::PathBuf::from("src/auth/session.rs")],
+        );
+        let lowered = apply_policy_rules(
+            &policy,
+            Profile::Balanced,
+            &[],
+            &[std::path::PathBuf::from("README.md")],
+        );
+
+        assert_eq!(elevated, Profile::Deep);
+        assert_eq!(lowered, Profile::Cheap);
+    }
+
+    #[test]
     fn rejects_missing_profile() {
         let raw = r#"
 version: 1
@@ -216,5 +366,20 @@ profiles:
 "#;
         let err = PolicyFile::parse_yaml(raw, "broken.yaml").unwrap_err();
         assert!(matches!(err, PolicyError::Parse { .. }));
+    }
+
+    #[test]
+    fn rejects_rule_without_matcher() {
+        let raw = format!(
+            r#"
+{POLICY}
+rules:
+  - min_profile: deep
+"#
+        );
+
+        let err = PolicyFile::parse_yaml(&raw, "broken.yaml").unwrap_err();
+
+        assert!(matches!(err, PolicyError::EmptyRuleMatcher { index: 1 }));
     }
 }

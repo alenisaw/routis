@@ -1,11 +1,12 @@
+use crate::session_store::{default_session_store_path, SessionStore};
 use crate::tui::{
     command::{complete_slash_command, matching_commands, parse_slash_command, SlashCommand},
     config::{default_config_path, load_config, save_config},
     history::{default_history_path, ShellHistory},
     render::render_app,
     state::{
-        detect_provider_diagnostics, theme_name, AppMode, AppState, PaletteMode, SessionPhase,
-        SessionPickerItem, SetupStep, THEME_MAX,
+        detect_provider_diagnostics, theme_name, AppMode, AppState, ConfirmationChoice,
+        PaletteMode, SessionPhase, SessionPickerItem, SetupStep, THEME_MAX,
     },
 };
 use anyhow::Result;
@@ -19,6 +20,7 @@ pub async fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Resul
         Some(config) => AppState::with_config(config),
         None => AppState::setup(),
     };
+    sync_repo_context(&mut state);
     let history_path = default_history_path();
     let mut history = ShellHistory::load(&history_path, 1000)?;
 
@@ -74,7 +76,7 @@ fn handle_key(state: &mut AppState, key: KeyEvent, history: &mut ShellHistory) -
         _ => {}
     }
 
-    if key.code == KeyCode::Char('?') {
+    if key.code == KeyCode::F(1) {
         state.ui.shortcuts_open = !state.ui.shortcuts_open;
         return Ok(false);
     }
@@ -86,6 +88,10 @@ fn handle_key(state: &mut AppState, key: KeyEvent, history: &mut ShellHistory) -
 
     if state.ui.command_palette_open {
         return Ok(handle_palette_key(state, key, history));
+    }
+
+    if state.mode == AppMode::Session && state.session.phase == SessionPhase::AwaitingConfirmation {
+        return Ok(handle_confirmation_key(state, key));
     }
 
     match key.code {
@@ -135,6 +141,27 @@ fn handle_key(state: &mut AppState, key: KeyEvent, history: &mut ShellHistory) -
         _ => {}
     }
     Ok(false)
+}
+
+fn handle_confirmation_key(state: &mut AppState, key: KeyEvent) -> bool {
+    match key.code {
+        KeyCode::Esc => state.cancel_session(),
+        KeyCode::Up => state.ui.confirmation_index = state.ui.confirmation_index.saturating_sub(1),
+        KeyCode::Down => {
+            state.ui.confirmation_index =
+                (state.ui.confirmation_index + 1).min(ConfirmationChoice::ALL.len() - 1);
+        }
+        KeyCode::Char('1') => state.ui.confirmation_index = 0,
+        KeyCode::Char('2') => state.ui.confirmation_index = 1,
+        KeyCode::Char('p') | KeyCode::Char('P') => confirm_provider_execution(state),
+        KeyCode::Char('c') | KeyCode::Char('C') => state.cancel_session(),
+        KeyCode::Enter => match ConfirmationChoice::ALL[state.ui.confirmation_index] {
+            ConfirmationChoice::Proceed => confirm_provider_execution(state),
+            ConfirmationChoice::Decline => state.cancel_session(),
+        },
+        _ => {}
+    }
+    false
 }
 
 pub fn handle_key_for_test(state: &mut AppState, key: KeyEvent) {
@@ -346,11 +373,11 @@ fn handle_setup_key(state: &mut AppState, key: KeyEvent) {
             state.ui.status_line = "use /quit to exit Routis".to_string();
         }
         KeyCode::Enter => confirm_setup(state),
-        KeyCode::Tab | KeyCode::Right if state.setup.step == SetupStep::Provider => {
+        KeyCode::Right if state.setup.step == SetupStep::Provider => {
             confirm_setup(state);
         }
-        KeyCode::Tab | KeyCode::Right => state.setup.step = state.setup.step.next(),
-        KeyCode::BackTab | KeyCode::Left => state.setup.step = state.setup.step.previous(),
+        KeyCode::Right => state.setup.step = state.setup.step.next(),
+        KeyCode::Left => state.setup.step = state.setup.step.previous(),
         KeyCode::Up => setup_move_up(state),
         KeyCode::Down => setup_move_down(state),
         KeyCode::Char(' ') => setup_move_down(state),
@@ -526,6 +553,10 @@ fn apply_command(
                     format!("model: {}", state.config.model),
                     format!("reasoning: {}", state.config.reasoning),
                     format!("theme: {}", state.config.theme),
+                    format!("policy file: {}", state.config.policy_file),
+                    format!("branch: {}", state.repo_context.branch),
+                    format!("changed files: {}", state.repo_context.changed_files),
+                    format!("area: {}", state.repo_context.impact_area),
                     format!("mode: {:?}", state.mode),
                 ],
             );
@@ -595,6 +626,107 @@ fn apply_command(
         Ok(SlashCommand::Clear) => {
             clear_view(state);
         }
+        Ok(SlashCommand::Context) => {
+            let lines = match crate::route_plan::collect_repo_context_for_cwd(
+                std::env::current_dir().unwrap_or_default(),
+            ) {
+                Ok(context) => {
+                    state.repo_context = repo_context_state_from_context(&context);
+                    let summary = crate::route_plan::repo_map_summary(&context);
+                    let mut lines = vec![
+                        format!("branch: {}", summary.branch),
+                        format!("changed files: {}", summary.changed_files),
+                        format!("area: {}", crate::route_plan::format_impact_area(&context)),
+                        format!("markers: {}", display_list(&summary.repo_markers)),
+                        format!("manifests: {}", display_list(&summary.manifests)),
+                        format!("docs: {}", display_list(&summary.docs)),
+                        format!("tests: {}", display_list(&summary.tests)),
+                        format!("workflows: {}", display_list(&summary.workflows)),
+                        format!("instructions: {}", display_list(&summary.instruction_files)),
+                    ];
+                    lines.extend(
+                        context
+                            .changed_files
+                            .iter()
+                            .take(5)
+                            .map(|path| format!("file: {}", path.display())),
+                    );
+                    lines
+                }
+                Err(error) => vec![format!("context unavailable: {error}")],
+            };
+            state.ui.status_line = "repository context loaded".to_string();
+            push_command_event(state, "Command result", lines);
+            record_result = false;
+        }
+        Ok(SlashCommand::Route) => {
+            let task = state
+                .ui
+                .input
+                .split_once(char::is_whitespace)
+                .map(|(_, rest)| rest)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("analyze repository routing");
+            let lines = match crate::route_plan::build_execution_plan(
+                task,
+                &state.config.policy_file,
+                std::env::current_dir().unwrap_or_default(),
+            ) {
+                Ok(plan) => vec![
+                    format!("task: {task}"),
+                    format!(
+                        "selected: {} / {} / {}",
+                        plan.profile, plan.model, plan.reasoning
+                    ),
+                    format!("intent: {}", plan.intent),
+                    format!("area: {}", plan.area),
+                    format!("scope: {}", plan.scope),
+                    format!("risk: {}", plan.risk),
+                    format!("confidence: {}", plan.confidence),
+                    format!("reason: {}", plan.reason),
+                ],
+                Err(error) => vec![format!("route unavailable: {error}")],
+            };
+            state.ui.status_line = "route preview generated".to_string();
+            push_command_event(state, "Command result", lines);
+            record_result = false;
+        }
+        Ok(SlashCommand::PolicyFile) => {
+            let path = state
+                .ui
+                .input
+                .split_whitespace()
+                .nth(1)
+                .unwrap_or(crate::route_plan::DEFAULT_POLICY_PATH)
+                .to_string();
+            let repo_root = std::env::current_dir()
+                .ok()
+                .and_then(|cwd| crate::route_plan::discover_repo_root(&cwd));
+            match crate::route_plan::load_policy(&path, repo_root.as_deref()) {
+                Ok(_) => {
+                    state.config.policy_file = path.clone();
+                    state.ui.status_line = format!("policy file set: {path}");
+                    push_command_event(
+                        state,
+                        "Command result",
+                        vec![format!("policy file: {path}")],
+                    );
+                }
+                Err(error) => {
+                    state.ui.status_line = format!("policy file rejected: {error}");
+                    push_command_event(
+                        state,
+                        "Command result",
+                        vec![
+                            format!("policy file rejected: {path}"),
+                            format!("error: {error}"),
+                        ],
+                    );
+                }
+            }
+            record_result = false;
+        }
         Ok(SlashCommand::History) => {
             state.ui.status_line = "history: recent prompts are stored locally".to_string();
             push_command_event(state, "Command result", history_lines(history));
@@ -603,7 +735,8 @@ fn apply_command(
         Ok(SlashCommand::Sessions) => {
             state.ui.status_line = "sessions opened".to_string();
             push_status_event(state);
-            open_session_picker(state, history);
+            let store = SessionStore::new(default_session_store_path());
+            open_session_picker(state, history, &store);
             record_result = false;
         }
         Ok(SlashCommand::Quit) => {
@@ -625,6 +758,24 @@ fn apply_command(
     state.ui.history_cursor = None;
 }
 
+fn sync_repo_context(state: &mut AppState) {
+    if let Ok(context) =
+        crate::route_plan::collect_repo_context_for_cwd(std::env::current_dir().unwrap_or_default())
+    {
+        state.repo_context = repo_context_state_from_context(&context);
+    }
+}
+
+fn repo_context_state_from_context(
+    context: &routis_context::RepoContext,
+) -> crate::tui::state::RepoContextState {
+    crate::tui::state::RepoContextState {
+        branch: context.branch.clone().unwrap_or_else(|| "-".to_string()),
+        changed_files: context.changed_files.len(),
+        impact_area: crate::route_plan::format_impact_area(context),
+    }
+}
+
 fn close_palette(state: &mut AppState, status: &str) {
     state.ui.command_palette_open = false;
     state.ui.palette_mode = PaletteMode::Commands;
@@ -636,18 +787,21 @@ fn close_palette(state: &mut AppState, status: &str) {
     state.ui.status_line = status.to_string();
 }
 
-fn open_session_picker(state: &mut AppState, history: &ShellHistory) {
-    state.ui.session_picker_all_items = history
-        .recent_detailed(12)
-        .into_iter()
-        .map(|item| SessionPickerItem {
-            conversation: item.conversation,
-            title: item.title,
-            created: item.created,
-            updated: item.updated,
-            branch: item.branch,
-        })
-        .collect();
+fn open_session_picker(state: &mut AppState, history: &ShellHistory, store: &SessionStore) {
+    state.ui.session_picker_all_items = session_store_items(store).unwrap_or_default();
+    if state.ui.session_picker_all_items.is_empty() {
+        state.ui.session_picker_all_items = history
+            .recent_detailed(12)
+            .into_iter()
+            .map(|item| SessionPickerItem {
+                conversation: item.conversation,
+                title: item.title,
+                created: item.created,
+                updated: item.updated,
+                branch: item.branch,
+            })
+            .collect();
+    }
     state.ui.session_picker_query.clear();
     refresh_session_picker_filter(state);
     state.ui.command_palette_open = true;
@@ -655,6 +809,29 @@ fn open_session_picker(state: &mut AppState, history: &ShellHistory) {
     state.ui.command_palette_index = 0;
     state.ui.input.clear();
     state.ui.status_line = "sessions opened".to_string();
+}
+
+fn session_store_items(store: &SessionStore) -> Result<Vec<SessionPickerItem>> {
+    Ok(store
+        .list()?
+        .into_iter()
+        .take(12)
+        .map(|session| SessionPickerItem {
+            conversation: session.task,
+            title: session.title,
+            created: session.created_at.to_string(),
+            updated: session.updated_at.to_string(),
+            branch: session.branch,
+        })
+        .collect())
+}
+
+pub fn open_session_picker_for_test(
+    state: &mut AppState,
+    history: &ShellHistory,
+    store: &SessionStore,
+) {
+    open_session_picker(state, history, store);
 }
 
 fn refresh_session_picker_filter(state: &mut AppState) {
@@ -707,6 +884,14 @@ fn history_lines(history: &ShellHistory) -> Vec<String> {
     lines
 }
 
+fn display_list(values: &[String]) -> String {
+    if values.is_empty() {
+        "-".to_string()
+    } else {
+        values.join(", ")
+    }
+}
+
 fn push_status_event(state: &mut AppState) {
     push_command_event(state, "Command result", vec![state.ui.status_line.clone()]);
 }
@@ -732,9 +917,7 @@ fn handle_session_confirmation(state: &mut AppState, input: &str) -> bool {
 
     match input.trim().to_ascii_lowercase().as_str() {
         "proceed" | "confirm" | "yes" => {
-            state.session.phase = SessionPhase::Ready;
-            state.ui.status_line = "confirmed: provider execution can start".to_string();
-            state.ui.input.clear();
+            confirm_provider_execution(state);
             true
         }
         "edit" => {
@@ -750,6 +933,12 @@ fn handle_session_confirmation(state: &mut AppState, input: &str) -> bool {
         }
         _ => false,
     }
+}
+
+fn confirm_provider_execution(state: &mut AppState) {
+    state.session.phase = SessionPhase::Ready;
+    state.ui.status_line = "confirmed: provider execution can start".to_string();
+    state.ui.input.clear();
 }
 
 fn clear_view(state: &mut AppState) {
@@ -780,6 +969,9 @@ fn apply_palette_selection(state: &mut AppState, history: &mut ShellHistory) -> 
         return false;
     };
     history.push(command);
+    state.ui.command_palette_open = false;
+    state.ui.palette_mode = PaletteMode::Commands;
+    state.ui.command_palette_index = 0;
     apply_command(state, parse_slash_command(command), history);
     true
 }

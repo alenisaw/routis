@@ -1,0 +1,18 @@
+[package]
+name = "routis-context"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Repository context collection for Routis."
+repository = "https://github.com/alenisaw/routis"
+readme = "../../README.md"
+keywords = ["cli", "ai", "codex", "routing"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+routis-core = { version = "0.1.0", path = "../routis-core" }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+
+[dev-dependencies]
+tempfile = "3.10"
