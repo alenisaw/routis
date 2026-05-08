@@ -2,33 +2,24 @@
 
 ## 0.3.0 - Repo Context and Session Store - 2026-05-05
 
-This release makes Routis aware of repository state before routing tasks.
+This release adds repo-aware routing, route previews, local sessions, and a cleaner TUI shell.
 
 ### Added
 
-- Added repository context collection for branch, changed files, file extensions, and risk zones.
-- Added RepoMapSummary for manifests, docs, tests, workflows, and instruction files.
-- Added Routing IR for English prompt classification by intent, area, scope, risk, confidence, and target hints.
-- Added risk zone detection for config, auth, schema, workflow, package, tests, docs, and TUI/UI paths.
-- Added repo-aware automatic routing so high-risk repository changes can raise the selected profile.
-- Added `routis context` for inspecting repository context directly.
-- Added `routis route <task>` and `/route <task>` for route previews without execution.
-- Added `/context` and `/policy-file <path>` to the TUI shell.
-- Added policy `rules` with `if_risk_zone`, `if_path`, `min_profile`, and `max_profile`.
-- Added local route session storage under `~/.routis/sessions`.
-- Added `routis session list` and `routis session resume <id|title>`.
+- Added Routing IR for English prompt classification by intent, area, scope, risk, and confidence.
+- Added repo context summaries for branch, changed files, risk zones, manifests, docs, tests, workflows, and instruction files.
+- Added `routis route <task>`, `routis context`, `/route`, `/context`, and `/policy-file`.
+- Added local route session storage and session resume commands.
 
 ### Changed
 
-- Updated the default policy file with high-risk minimum profile rules and a README cap rule.
-- Updated TUI header polish with compact mascot rendering, dotted internal dividers, calmer theme naming, and dotted metric bars.
-- Extended CLI `--explain` output with branch, changed file count, and risk zones.
-- Extended `/status`, `/context`, and task planning events with area, scope, risk, and confidence details.
-- Updated `/sessions` to prefer saved route sessions while keeping prompt history as a fallback.
+- Made automatic routing repo-aware, including policy rules for high-risk paths and README caps.
+- Reworked the TUI shell around prompt-first planning, confirmation choices, runtime context, Activity Tracker, and slower Routis output animation.
+- Updated `/status`, `/context`, task planning events, and `/sessions` around the new repo/session context.
 
 ### Quality
 
-- Added coverage for repo context collection, repo-aware routing, policy rules, context commands, session store, and session resume.
+- Added coverage for routing classification, repo context, policy rules, route previews, session storage, and TUI contracts.
 
 ## 0.2.2 - TUI Command and Layout Polish - 2026-05-05
 
