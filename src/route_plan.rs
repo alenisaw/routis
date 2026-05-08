@@ -77,21 +77,32 @@ pub fn load_policy(policy_path: &str, repo_root: Option<&Path>) -> Result<Loaded
     };
     let path = PathBuf::from(requested);
 
-    if let Ok(policy) = PolicyFile::load(&path) {
+    if path.is_absolute() {
+        let policy = PolicyFile::load(&path)
+            .with_context(|| format!("failed to load policy file `{}`", path.display()))?;
         return Ok(LoadedPolicy {
             policy,
             source: path.display().to_string(),
         });
     }
 
-    if path.is_relative() {
-        if let Some(root) = repo_root {
-            let rooted = root.join(&path);
-            if let Ok(policy) = PolicyFile::load(&rooted) {
+    let mut rooted_error = None;
+    if let Some(root) = repo_root {
+        let rooted = root.join(&path);
+        match PolicyFile::load(&rooted) {
+            Ok(policy) => {
                 return Ok(LoadedPolicy {
                     policy,
                     source: rooted.display().to_string(),
                 });
+            }
+            Err(error) => {
+                if requested.replace('\\', "/") == DEFAULT_POLICY_PATH {
+                    return Err(error).with_context(|| {
+                        format!("failed to load policy file `{}`", rooted.display())
+                    });
+                }
+                rooted_error = Some((rooted, error));
             }
         }
     }
@@ -104,8 +115,17 @@ pub fn load_policy(policy_path: &str, repo_root: Option<&Path>) -> Result<Loaded
         });
     }
 
-    let policy = PolicyFile::load(&path)
-        .with_context(|| format!("failed to load policy file `{}`", path.display()))?;
+    let policy = PolicyFile::load(&path).with_context(|| {
+        if let Some((rooted, _)) = rooted_error {
+            format!(
+                "failed to load policy file `{}` or `{}`",
+                rooted.display(),
+                path.display()
+            )
+        } else {
+            format!("failed to load policy file `{}`", path.display())
+        }
+    })?;
     Ok(LoadedPolicy {
         policy,
         source: path.display().to_string(),
@@ -237,4 +257,27 @@ fn is_repo_wide_task(task: &str) -> bool {
     ]
     .iter()
     .any(|signal| normalized.contains(signal))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn rooted_default_policy_error_is_not_masked_by_embedded_fallback() {
+        let dir = TempDir::new().unwrap();
+        let policy_dir = dir.path().join("configs").join("policies");
+        fs::create_dir_all(&policy_dir).unwrap();
+        let policy_path = policy_dir.join("default.yaml");
+        fs::write(&policy_path, "version: [").unwrap();
+
+        let error = load_policy(DEFAULT_POLICY_PATH, Some(dir.path())).unwrap_err();
+        let message = format!("{error:#}");
+
+        assert!(message.contains("failed to load policy file"));
+        assert!(message.contains("default.yaml"));
+        assert!(!message.contains("embedded default policy"));
+    }
 }

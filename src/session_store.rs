@@ -36,10 +36,12 @@ impl SessionRecord {
         reasoning: &str,
     ) -> Self {
         let now = now_epoch_seconds();
+        let id_time = now_epoch_nanos();
+        let title = slug(task);
         Self {
             schema_version: 1,
-            id: format!("{now}-{}", slug(task)),
-            title: slug(task),
+            id: format!("{id_time}-{title}"),
+            title,
             task: task.to_string(),
             branch: branch.to_string(),
             policy: policy.to_string(),
@@ -177,6 +179,13 @@ fn now_epoch_seconds() -> u64 {
         .unwrap_or(0)
 }
 
+fn now_epoch_nanos() -> u128 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -257,5 +266,28 @@ mod tests {
 
         let stored = store.find(&record.title).unwrap().unwrap();
         assert_eq!(stored.task, r"keep literal \n in task");
+    }
+
+    #[test]
+    fn session_ids_do_not_collide_for_repeated_prompt() {
+        let first = SessionRecord::new(
+            "debug auth flow",
+            "main",
+            "default",
+            "deep",
+            "gpt-5.5",
+            "high",
+        );
+        let second = SessionRecord::new(
+            "debug auth flow",
+            "main",
+            "default",
+            "deep",
+            "gpt-5.5",
+            "high",
+        );
+
+        assert_ne!(first.id, second.id);
+        assert_eq!(first.title, second.title);
     }
 }
