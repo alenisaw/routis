@@ -2,12 +2,13 @@ use anyhow::{Context, Result};
 use routis_core::DecisionTrace;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs::{self, OpenOptions},
-    io::{BufRead, BufReader, Write},
+    fs,
+    io::{BufRead, BufReader},
     path::{Path, PathBuf},
 };
 
 use routis::paths::routis_dir;
+use routis::private_fs;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TraceSummary {
@@ -48,27 +49,16 @@ impl From<&DecisionTrace> for TraceSummary {
     }
 }
 
-#[must_use]
-pub fn traces_dir() -> PathBuf {
-    routis_dir().join("traces")
+pub fn traces_dir() -> Result<PathBuf> {
+    Ok(routis_dir()?.join("traces"))
 }
 
 pub fn append_trace(trace: &DecisionTrace) -> Result<PathBuf> {
-    let dir = traces_dir();
-    create_private_dir(&dir)?;
+    let dir = traces_dir()?;
+    private_fs::create_private_dir(&dir)?;
     let path = trace_file_path(&dir, &trace.session_id);
-    let mut options = OpenOptions::new();
-    options.create(true).append(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options
-        .open(&path)
-        .with_context(|| format!("failed to open trace file `{}`", path.display()))?;
     let line = serde_json::to_string(trace).context("failed to serialize decision trace")?;
-    writeln!(file, "{line}").with_context(|| format!("failed to write `{}`", path.display()))?;
+    private_fs::append_private_file(&path, format!("{line}\n").as_bytes())?;
     Ok(path)
 }
 
@@ -93,7 +83,7 @@ pub fn read_trace_file_lossy(path: impl AsRef<Path>) -> Result<(Vec<DecisionTrac
 }
 
 pub fn list_trace_files() -> Result<Vec<PathBuf>> {
-    let dir = traces_dir();
+    let dir = traces_dir()?;
     if !dir.exists() {
         return Ok(Vec::new());
     }
@@ -155,17 +145,6 @@ fn trace_file_path(dir: &Path, session_id: &str) -> PathBuf {
         .take(80)
         .collect::<String>();
     dir.join(format!("{safe_session}.jsonl"))
-}
-
-fn create_private_dir(path: &Path) -> Result<()> {
-    fs::create_dir_all(path).with_context(|| format!("failed to create `{}`", path.display()))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o700))
-            .with_context(|| format!("failed to set permissions on `{}`", path.display()))?;
-    }
-    Ok(())
 }
 
 #[cfg(test)]

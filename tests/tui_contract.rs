@@ -333,18 +333,18 @@ fn context_command_records_repo_context_block() {
 #[test]
 fn policy_file_command_updates_tui_config() {
     let mut state = AppState::home();
-    state.ui.input = "/policy-file .routis/policies/default.yaml".to_string();
+    state.ui.input = "/policy-file ~/.routis/policies/default.yaml".to_string();
 
     handle_key_for_test(
         &mut state,
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
     );
 
-    assert_eq!(state.config.policy_file, ".routis/policies/default.yaml");
+    assert_eq!(state.config.policy_file, "~/.routis/policies/default.yaml");
     assert!(state.session.events.iter().any(|event| event
         .lines
         .iter()
-        .any(|line| line.contains("policy file: .routis/policies/default.yaml"))));
+        .any(|line| line.contains("policy file: ~/.routis/policies/default.yaml"))));
 }
 
 #[test]

@@ -112,8 +112,8 @@ impl Default for ProviderDiagnostics {
             version: "Not checked".to_string(),
             auth_status: "Not checked".to_string(),
             config_path: crate::tui::config::default_config_path()
-                .display()
-                .to_string(),
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|error| error.to_string()),
         }
     }
 }
@@ -241,11 +241,11 @@ impl Default for SessionState {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MetricsState {
     pub tasks: usize,
-    pub context_percent: usize,
+    pub context_load_hint: usize,
     pub input_tokens: usize,
     pub output_tokens: usize,
     pub total_tokens: usize,
-    pub saved_percent: usize,
+    pub confidence_hint: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -403,8 +403,8 @@ impl AppState {
         self.metrics.input_tokens = estimate_input_tokens(task, &self.config);
         self.metrics.output_tokens = 0;
         self.metrics.total_tokens = self.metrics.input_tokens;
-        self.metrics.context_percent = plan.context_percent;
-        self.metrics.saved_percent = plan.saved_percent;
+        self.metrics.context_load_hint = plan.context_load_hint;
+        self.metrics.confidence_hint = plan.confidence_hint;
         self.repo_context.branch = plan.branch.clone();
         self.repo_context.changed_files = plan.changed_files;
         self.repo_context.impact_area = plan.impact_area.clone();
@@ -543,8 +543,8 @@ fn execution_plan(task: &str, state: &AppState) -> crate::route_plan::ExecutionP
         scope: "unknown".to_string(),
         risk: "medium".to_string(),
         confidence: "low".to_string(),
-        context_percent: state.metrics.context_percent,
-        saved_percent: state.metrics.saved_percent,
+        context_load_hint: state.metrics.context_load_hint,
+        confidence_hint: state.metrics.confidence_hint,
         reason: "fallback plan after routing error".to_string(),
         policy_source: "fallback".to_string(),
     })
@@ -607,7 +607,7 @@ fn default_display_name() -> String {
         .or_else(|_| std::env::var("USER"))
         .ok()
         .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| "Alen".to_string())
+        .unwrap_or_else(|| "User".to_string())
 }
 
 pub fn detect_provider_diagnostics() -> ProviderDiagnostics {
@@ -645,8 +645,13 @@ pub fn detect_provider_diagnostics() -> ProviderDiagnostics {
                 "Codex CLI found; version check returned a non-zero status".to_string()
             };
         }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            d.command = "Missing".to_string();
+            d.version = "Unavailable".to_string();
+            d.auth_status = "Codex CLI executable was not found on PATH".to_string();
+        }
         Err(error) => {
-            d.command = "Found".to_string();
+            d.command = "Missing".to_string();
             d.version = "Unavailable".to_string();
             d.auth_status = format!("Codex CLI found but could not be executed: {error}");
         }
@@ -690,7 +695,11 @@ fn find_codex_command() -> Option<String> {
     }
     #[cfg(not(windows))]
     {
-        Some("codex".to_string())
+        let path = std::env::var_os("PATH")?;
+        std::env::split_paths(&path)
+            .map(|dir| dir.join("codex"))
+            .find(|candidate| candidate.is_file())
+            .map(|candidate| candidate.display().to_string())
     }
 }
 

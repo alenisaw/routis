@@ -14,7 +14,7 @@ Traces are stored as JSONL files:
 
 Each line is one `DecisionTrace` record.
 
-`ROUTIS_HOME` overrides the default `~/.routis` location. On Unix, Routis creates the trace directory with `0700` permissions and trace/secret files with `0600` permissions. On Windows, Routis uses normal filesystem creation and relies on the user's profile ACLs.
+`ROUTIS_HOME` overrides the default `~/.routis` location. If the user home directory cannot be resolved, Routis returns `could not determine user home; set ROUTIS_HOME` instead of writing runtime state beside the executable or current directory. On Unix, Routis creates sensitive local directories with `0700` permissions and trace/secret/session/config files with `0600` permissions. On Windows, strict ACL hardening is not implemented in this pass; Routis uses normal filesystem creation and relies on the user's profile ACLs.
 
 ## Schema
 
@@ -48,7 +48,7 @@ route_tree
 
 ## CLI behavior
 
-`--explain` should print a compact tree:
+`routis route` stores a local trace by default. `--explain` additionally prints a compact tree:
 
 ```text
 Routis Decision Trace
@@ -87,4 +87,4 @@ routis traces --latest
 
 ## Privacy rule
 
-Default trace files must not include raw task text, raw source code, `.env` values, private keys, tokens, or provider output.
+Default trace and session files must not include raw task text, raw source code, `.env` values, private keys, tokens, or provider output.

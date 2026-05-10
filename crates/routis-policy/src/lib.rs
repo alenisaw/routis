@@ -228,21 +228,6 @@ fn profile_rank(profile: Profile) -> u8 {
     }
 }
 
-#[must_use]
-pub fn format_command(command: &[String]) -> String {
-    command
-        .iter()
-        .map(|part| {
-            if part.contains(' ') || part.contains('"') {
-                format!("\"{}\"", part.replace('"', "\\\""))
-            } else {
-                part.clone()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -277,8 +262,17 @@ profiles:
         let policy = PolicyFile::parse_yaml(POLICY, "test.yaml").unwrap();
         let command = build_codex_command(&policy, Profile::Deep, "debug auth flow").unwrap();
         assert_eq!(
-            format_command(&command),
-            "codex exec -m gpt-5.5 --reasoning high -- \"debug auth flow\""
+            command,
+            vec![
+                "codex",
+                "exec",
+                "-m",
+                "gpt-5.5",
+                "--reasoning",
+                "high",
+                "--",
+                "debug auth flow"
+            ]
         );
     }
 

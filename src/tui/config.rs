@@ -1,4 +1,4 @@
-use crate::tui::state::ConfigState;
+use crate::{private_fs, tui::state::ConfigState};
 use anyhow::{Context, Result};
 use std::{
     fs,
@@ -7,14 +7,12 @@ use std::{
 
 const DEFAULT_POLICY_YAML: &str = include_str!("../../configs/policies/default.yaml");
 
-#[must_use]
-pub fn routis_dir() -> PathBuf {
+pub fn routis_dir() -> Result<PathBuf> {
     crate::paths::routis_dir()
 }
 
-#[must_use]
-pub fn default_config_path() -> PathBuf {
-    routis_dir().join("config.toml")
+pub fn default_config_path() -> Result<PathBuf> {
+    Ok(routis_dir()?.join("config.toml"))
 }
 
 pub fn load_config(path: &Path) -> Result<Option<ConfigState>> {
@@ -28,11 +26,10 @@ pub fn load_config(path: &Path) -> Result<Option<ConfigState>> {
 
 pub fn save_config(path: &Path, config: &ConfigState) -> Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("failed to create `{}`", parent.display()))?;
+        private_fs::create_private_dir(parent)?;
         ensure_default_policy(parent)?;
     }
-    fs::write(path, serialize_config(config))
+    private_fs::write_private_file(path, serialize_config(config)?.as_bytes())
         .with_context(|| format!("failed to write config `{}`", path.display()))
 }
 
@@ -50,33 +47,68 @@ fn ensure_default_policy(routis_dir: &Path) -> Result<()> {
 }
 
 fn parse_config(raw: &str) -> ConfigState {
+    toml::from_str::<PersistedConfig>(raw)
+        .map(ConfigState::from)
+        .unwrap_or_else(|_| parse_legacy_config(raw))
+}
+
+fn serialize_config(config: &ConfigState) -> Result<String> {
+    toml::to_string_pretty(&PersistedConfig::from(config)).context("failed to serialize config")
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct PersistedConfig {
+    schema_version: u32,
+    display_name: String,
+    provider: String,
+    model: String,
+    reasoning: String,
+    theme: String,
+    policy_file: String,
+}
+
+impl From<PersistedConfig> for ConfigState {
+    fn from(value: PersistedConfig) -> Self {
+        Self {
+            display_name: value.display_name,
+            provider: value.provider,
+            model: value.model,
+            reasoning: value.reasoning,
+            theme: value.theme,
+            policy_file: value.policy_file,
+        }
+    }
+}
+
+impl From<&ConfigState> for PersistedConfig {
+    fn from(value: &ConfigState) -> Self {
+        Self {
+            schema_version: 1,
+            display_name: value.display_name.clone(),
+            provider: value.provider.clone(),
+            model: value.model.clone(),
+            reasoning: value.reasoning.clone(),
+            theme: value.theme.clone(),
+            policy_file: value.policy_file.clone(),
+        }
+    }
+}
+
+fn parse_legacy_config(raw: &str) -> ConfigState {
     let mut config = ConfigState::default();
     for line in raw.lines() {
-        let Some((key, value)) = line.split_once('=') else {
-            continue;
-        };
-        let value = value.trim();
-        match key.trim() {
-            "display_name" => config.display_name = value.to_string(),
-            "provider" => config.provider = value.to_string(),
-            "model" => config.model = value.to_string(),
-            "reasoning" => config.reasoning = value.to_string(),
-            "theme" => config.theme = value.to_string(),
-            "policy_file" => config.policy_file = value.to_string(),
-            _ => {}
+        if let Some((key, value)) = line.split_once('=') {
+            match key.trim() {
+                "display_name" => config.display_name = value.trim().to_string(),
+                "provider" => config.provider = value.trim().to_string(),
+                "model" => config.model = value.trim().to_string(),
+                "reasoning" => config.reasoning = value.trim().to_string(),
+                "theme" => config.theme = value.trim().to_string(),
+                "policy_file" => config.policy_file = value.trim().to_string(),
+                _ => {}
+            }
         }
     }
     config
-}
-
-fn serialize_config(config: &ConfigState) -> String {
-    [
-        format!("display_name={}", config.display_name),
-        format!("provider={}", config.provider),
-        format!("model={}", config.model),
-        format!("reasoning={}", config.reasoning),
-        format!("theme={}", config.theme),
-        format!("policy_file={}", config.policy_file),
-    ]
-    .join("\n")
 }

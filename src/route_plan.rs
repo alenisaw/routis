@@ -7,7 +7,7 @@ use std::{
     process::Command,
 };
 
-pub const DEFAULT_POLICY_PATH: &str = ".routis/policies/default.yaml";
+pub const DEFAULT_POLICY_PATH: &str = "~/.routis/policies/default.yaml";
 const DEFAULT_POLICY_YAML: &str = include_str!("../configs/policies/default.yaml");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,8 +23,8 @@ pub struct ExecutionPlan {
     pub scope: String,
     pub risk: String,
     pub confidence: String,
-    pub context_percent: usize,
-    pub saved_percent: usize,
+    pub context_load_hint: usize,
+    pub confidence_hint: usize,
     pub reason: String,
     pub policy_source: String,
 }
@@ -110,7 +110,7 @@ pub fn load_policy(policy_path: &str, repo_root: Option<&Path>) -> Result<Loaded
     }
 
     if is_default_policy {
-        let installed = crate::paths::default_policy_path();
+        let installed = crate::paths::default_policy_path()?;
         if installed.exists() {
             let policy = PolicyFile::load(&installed)
                 .with_context(|| format!("failed to load policy file `{}`", installed.display()))?;
@@ -231,8 +231,8 @@ fn plan_execution_with_decision(
         scope: decision.classification.scope.as_str().to_string(),
         risk: decision.classification.risk.as_str().to_string(),
         confidence: decision.classification.confidence.as_str().to_string(),
-        context_percent: repo_context.changed_files.len().saturating_mul(6).min(100),
-        saved_percent: saved_percent(decision.classification.confidence),
+        context_load_hint: repo_context.changed_files.len().saturating_mul(6).min(100),
+        confidence_hint: confidence_hint(decision.classification.confidence),
         reason: decision.explain.clone(),
         policy_source: String::new(),
     };
@@ -272,7 +272,7 @@ fn paths_to_strings(paths: &[PathBuf]) -> Vec<String> {
         .collect()
 }
 
-fn saved_percent(confidence: Confidence) -> usize {
+fn confidence_hint(confidence: Confidence) -> usize {
     match confidence {
         Confidence::High => 38,
         Confidence::Medium => 28,

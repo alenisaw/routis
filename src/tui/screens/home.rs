@@ -187,7 +187,7 @@ fn render_activity_tracker(frame: &mut Frame, area: Rect, state: &AppState, pale
         kv_line_width("today", "0 done", area.width, palette),
         kv_line_width(
             "confidence",
-            format!("{}%", state.metrics.saved_percent),
+            format!("{}%", state.metrics.confidence_hint),
             area.width,
             palette,
         ),

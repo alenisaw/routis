@@ -30,7 +30,7 @@ struct Args {
 enum Command {
     /// Preview the routing decision without provider execution.
     Route {
-        /// Print the decision tree and store a JSONL trace.
+        /// Print the decision tree. A local JSONL trace is stored by default.
         #[arg(long)]
         explain: bool,
 
@@ -97,7 +97,7 @@ fn run_route(task: Vec<String>, explain: bool) -> Result<()> {
     )?;
     trace_cli::append_cli_trace(&trace).context("failed to store decision trace")?;
 
-    println!("task: {task}");
+    println!("task_hash: {}", trace.task_hash);
     println!(
         "selected: {} / {} / {}",
         plan.profile, plan.model, plan.reasoning

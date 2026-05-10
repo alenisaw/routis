@@ -192,13 +192,13 @@ fn render_runtime_line(frame: &mut Frame, area: Rect, state: &AppState, palette:
     ];
     let right_text = format!(
         "context hint {}% {} input {} tk {} output {} tk {} confidence {}%",
-        state.metrics.context_percent,
+        state.metrics.context_load_hint,
         symbols::SEP,
         state.metrics.input_tokens,
         symbols::SEP,
         state.metrics.output_tokens,
         symbols::SEP,
-        state.metrics.saved_percent
+        state.metrics.confidence_hint
     );
     let left_width = spans_width(&left);
     let right_width = UnicodeWidthStr::width(right_text.as_str());

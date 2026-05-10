@@ -1,19 +1,18 @@
 use anyhow::{Context, Result};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use routis_core::{
     DecisionTrace, DecisionTraceInput, PromptMode, ProviderCommandPreview, RepoFact, RiskZone,
     RoutingDecision,
 };
 use sha2::Sha256;
 use std::{
-    fs::{self, OpenOptions},
-    io::Write,
-    path::Path,
+    fs,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use crate::trace_store::{append_trace, latest_trace, read_trace_summaries};
 use routis::paths::routis_dir;
+use routis::private_fs;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -38,7 +37,7 @@ pub fn build_cli_decision_trace(
     Ok(DecisionTrace::from_routing_decision(
         decision,
         DecisionTraceInput {
-            session_id: new_cli_session_id(),
+            session_id: new_cli_session_id()?,
             task_hash,
             selected_model: input.selected_model,
             selected_reasoning: input.selected_reasoning,
@@ -122,54 +121,36 @@ pub fn task_hmac_hex(task: &str, secret: &[u8]) -> Result<String> {
 }
 
 fn load_or_create_trace_secret() -> Result<Vec<u8>> {
-    let path = routis_dir().join("secret");
+    let path = routis_dir()?.join("secret");
     if path.exists() {
-        return fs::read(&path).with_context(|| format!("failed to read `{}`", path.display()));
+        let secret =
+            fs::read(&path).with_context(|| format!("failed to read `{}`", path.display()))?;
+        if secret.len() != 32 {
+            anyhow::bail!(
+                "invalid trace secret length in `{}`; expected 32 bytes",
+                path.display()
+            );
+        }
+        return Ok(secret);
     }
     if let Some(parent) = path.parent() {
-        create_private_dir(parent)?;
+        private_fs::create_private_dir(parent)?;
     }
     let mut secret = [0_u8; 32];
-    getrandom::getrandom(&mut secret)
+    getrandom::fill(&mut secret)
         .map_err(|error| anyhow::anyhow!("failed to generate trace secret: {error}"))?;
-    write_private_file(&path, &secret)?;
+    private_fs::write_private_file(&path, &secret)?;
     Ok(secret.to_vec())
 }
 
-fn write_private_file(path: &Path, bytes: &[u8]) -> Result<()> {
-    let mut options = OpenOptions::new();
-    options.create_new(true).write(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options
-        .open(path)
-        .with_context(|| format!("failed to create `{}`", path.display()))?;
-    file.write_all(bytes)
-        .with_context(|| format!("failed to write `{}`", path.display()))?;
-    Ok(())
-}
-
-fn create_private_dir(path: &Path) -> Result<()> {
-    fs::create_dir_all(path).with_context(|| format!("failed to create `{}`", path.display()))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o700))
-            .with_context(|| format!("failed to set permissions on `{}`", path.display()))?;
-    }
-    Ok(())
-}
-
-fn new_cli_session_id() -> String {
+fn new_cli_session_id() -> Result<String> {
     let mut random = [0_u8; 6];
-    let _ = getrandom::getrandom(&mut random);
+    getrandom::fill(&mut random)
+        .map_err(|error| anyhow::anyhow!("failed to generate CLI session id: {error}"))?;
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |duration| duration.as_secs());
-    format!("cli-{now}-{}", hex(&random))
+    Ok(format!("cli-{now}-{}", hex(&random)))
 }
 
 fn sanitize_provider_command_preview(
@@ -188,12 +169,7 @@ fn sanitize_provider_command_preview(
 
 pub fn sanitize_trace_value(value: &str, raw_task: &str) -> String {
     let mut sanitized = value.replace(raw_task, "<task-redacted>");
-    for marker in [
-        "OPENAI_API_KEY=",
-        "ANTHROPIC_API_KEY=",
-        "Authorization: Bearer ",
-        "Bearer ",
-    ] {
+    for marker in ["OPENAI_API_KEY=", "ANTHROPIC_API_KEY=", "x-api-key="] {
         if let Some(index) = sanitized.find(marker) {
             let end = sanitized[index..]
                 .find(char::is_whitespace)
@@ -201,12 +177,44 @@ pub fn sanitize_trace_value(value: &str, raw_task: &str) -> String {
             sanitized.replace_range(index..end, "<secret-redacted>");
         }
     }
-    sanitized = sanitized.replace(".env", "<env-file>");
+    for marker in ["Authorization: Bearer ", "Bearer "] {
+        if let Some(index) = sanitized.find(marker) {
+            let end = sanitized[index..]
+                .find(char::is_whitespace)
+                .map_or(sanitized.len(), |offset| index + offset);
+            sanitized.replace_range(index..end, "<secret-redacted>");
+        }
+    }
+    sanitized = sanitized
+        .split_whitespace()
+        .map(|part| {
+            let lower = part.to_ascii_lowercase();
+            if part.starts_with("sk-")
+                || part.starts_with("ghp_")
+                || part.starts_with("github_pat_")
+                || lower.contains(".env")
+                || looks_like_jwt(part)
+            {
+                "<secret-redacted>"
+            } else {
+                part
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    if sanitized.contains("-----BEGIN") && sanitized.contains("PRIVATE KEY-----") {
+        sanitized = "<secret-redacted>".to_string();
+    }
     if sanitized.len() > 160 {
         sanitized.truncate(157);
         sanitized.push_str("...");
     }
     sanitized
+}
+
+fn looks_like_jwt(value: &str) -> bool {
+    let parts = value.split('.').collect::<Vec<_>>();
+    parts.len() == 3 && parts.iter().all(|part| part.len() >= 8)
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -217,6 +225,12 @@ fn hex(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use routis_core::{route_task, Profile};
+    use std::sync::{Mutex, OnceLock};
+
+    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
+    }
 
     #[test]
     fn hmac_hash_is_stable_for_same_secret_and_differs_for_tasks() {
@@ -233,6 +247,7 @@ mod tests {
 
     #[test]
     fn trace_json_does_not_contain_raw_task_or_fake_secrets() {
+        let _guard = env_lock();
         let home = tempfile::TempDir::new().unwrap();
         std::env::set_var("ROUTIS_HOME", home.path());
         let task = "debug auth flow OPENAI_API_KEY=sk-test";
@@ -269,5 +284,46 @@ mod tests {
         assert!(!json.contains("Bearer abc"));
         assert!(!json.contains(".env"));
         assert!(json.contains("<task-redacted>"));
+    }
+
+    #[test]
+    fn sanitizer_redacts_common_secret_shapes() {
+        let raw = "fix issue";
+        let samples = [
+            "OPENAI_API_KEY=sk-test",
+            "ANTHROPIC_API_KEY=secret",
+            "Authorization: Bearer abc",
+            "x-api-key=abc",
+            "sk-live-test",
+            "ghp_abcdefghijklmnop",
+            "github_pat_abcdefghijklmnop",
+            ".env.local",
+            "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signaturexx",
+            "-----BEGIN PRIVATE KEY----- secret -----END PRIVATE KEY-----",
+        ];
+
+        for sample in samples {
+            let sanitized = sanitize_trace_value(sample, raw);
+            assert!(!sanitized.contains("sk-test"));
+            assert!(!sanitized.contains(" secret "));
+            assert!(!sanitized.contains("Bearer abc"));
+            assert!(!sanitized.contains(".env"));
+            assert!(!sanitized.contains("ghp_"));
+            assert!(!sanitized.contains("github_pat_"));
+            assert!(!sanitized.contains("PRIVATE KEY"));
+        }
+    }
+
+    #[test]
+    fn invalid_trace_secret_length_fails() {
+        let _guard = env_lock();
+        let home = tempfile::TempDir::new().unwrap();
+        std::env::set_var("ROUTIS_HOME", home.path());
+        std::fs::write(home.path().join("secret"), b"short").unwrap();
+
+        let error = load_or_create_trace_secret().unwrap_err().to_string();
+
+        std::env::remove_var("ROUTIS_HOME");
+        assert!(error.contains("invalid trace secret length"));
     }
 }

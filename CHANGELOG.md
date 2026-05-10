@@ -6,10 +6,10 @@ This release makes CLI routing decisions auditable. Routis now records structure
 
 ### Added
 
-- Added `DecisionTrace` schema in `routis-core` with schema version, session id, task hash, timestamp, classification fields, matched signals, repository facts, selected profile, selected model, selected reasoning, prompt mode, execution mode, provider command, and route tree.
+- Added `DecisionTrace` schema in `routis-core` with schema version, session id, task hash, timestamp, classification fields, structured matched signals, repository facts, policy source, policy overrides, selected profile, selected model, selected reasoning, prompt mode, execution mode, provider command preview, and route tree.
 - Added compact route tree rendering for CLI explain output.
-- Added stable task hashing for trace records so raw task text is not stored in JSONL traces by default.
-- Added JSONL trace storage under `.routis/traces/<session_id>.jsonl`.
+- Added HMAC-SHA256 task hashing for trace records with a per-install secret so raw task text is not stored in JSONL traces by default.
+- Added JSONL trace storage under `~/.routis/traces/<session_id>.jsonl`.
 - Added automatic trace append for `routis route <task>`.
 - Added `routis route --explain <task>` to print the decision tree after the normal route summary.
 - Added `routis traces` for recent trace summaries.
@@ -18,9 +18,19 @@ This release makes CLI routing decisions auditable. Routis now records structure
 - Added `tests/eval/routing_cases.json` and the explicit `eval` integration test target.
 - Added `docs/decision-trace.md` and `examples/decision_trace_example.jsonl`.
 - Added v0.4.0 release note text to the TUI home screen release list.
+- Added private local file helpers for sensitive Routis runtime state.
 
 ### Fixed
 
+- Fixed Routis home resolution so persistent runtime data defaults to `~/.routis`, honors `ROUTIS_HOME`, and fails explicitly when the user home cannot be resolved.
+- Fixed trace secret handling so empty or malformed secret files fail safely instead of weakening task hashes.
+- Fixed CLI session ids so trace files use generated filesystem-safe ids instead of merging unrelated route decisions into one `cli` trace.
+- Fixed session persistence so route sessions no longer store raw task text by default.
+- Fixed CLI route output so raw task text is not printed by default.
+- Fixed trace sanitization for common API keys, bearer tokens, GitHub tokens, `.env` paths, JWT-like values, private key blocks, and raw task arguments.
+- Fixed `git status --porcelain=v1 -z` rename and copy parsing so the new target path is used for changed-file context.
+- Fixed provider detection so missing non-Windows `codex` binaries are not reported as found.
+- Fixed default display-name fallback to use `User` instead of an author-specific name.
 - Removed duplicated route construction in the CLI path so the printed route summary and stored trace use the same routing decision.
 - Fixed route explanation text after policy rules are applied, so `reason` no longer describes the pre-policy profile when a policy rule changes the selected profile.
 - Made equal-weight area selection deterministic so routing prompts keep the `routing` area when repository context is also mentioned.
@@ -30,12 +40,17 @@ This release makes CLI routing decisions auditable. Routis now records structure
 
 - Updated TUI contract tests to derive displayed version labels from the package version instead of hard-coding `0.3.0`.
 - Updated README command reference and capability text for Decision Trace.
+- Replaced custom config serialization with TOML and schema versioning.
+- Replaced shell-style provider command formatting in policy tests with argv-list assertions.
+- Replaced synthetic internal percentage metric names with explicit hint fields.
+- Updated default policy path text to `~/.routis/policies/default.yaml`.
 
 ### Quality
 
 - Added CLI smoke coverage for `route --explain` trace creation.
 - Added CLI smoke coverage for `traces --latest`.
 - Added core tests for stable task hashing and matched signal parsing.
+- Added tests for invalid trace secrets, trace sanitizer redaction, private session persistence, target path parsing for renamed/copied files, and new default policy path behavior.
 
 ## 0.3.0 - Repo-Aware Routing and Local Sessions - 2026-05-08
 

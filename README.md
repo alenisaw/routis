@@ -160,9 +160,9 @@ routis
 
 Enter a task in the input row. Routis plans locally, shows the prompt, provider, model and reasoning, selected area, branch, changed file count, and confidence, then waits for `proceed`, `edit`, or `cancel`.
 
-The TUI stores persistent Routis runtime files under `~/.routis` by default: config in `~/.routis/config.toml`, prompt history in `~/.routis/shell_history`, route sessions in `~/.routis/sessions`, and default policies in `~/.routis/policies`. Set `ROUTIS_HOME` to override this location. Provider diagnostics locate `codex` from the system PATH and run `codex --version`; on Windows, Routis prefers executable shims such as `.cmd` or `.exe` over blocked PowerShell scripts.
+The TUI stores persistent Routis runtime files under `~/.routis` by default: TOML config in `~/.routis/config.toml`, prompt history in `~/.routis/shell_history`, route sessions in `~/.routis/sessions`, and default policies in `~/.routis/policies`. Set `ROUTIS_HOME` to override this location. If the user home directory cannot be resolved, Routis returns an explicit error instead of falling back to a local `.routis` directory. Provider diagnostics locate `codex` from the system PATH and run `codex --version`; on Windows, Routis prefers executable shims such as `.cmd` or `.exe` over blocked PowerShell scripts.
 
-Decision traces are stored as JSONL files under `~/.routis/traces`. The trace stores an HMAC-SHA256 task hash using a per-install secret at `~/.routis/secret` instead of raw task text by default.
+Decision traces are stored as JSONL files under `~/.routis/traces`. The trace stores an HMAC-SHA256 task hash using a per-install 32-byte secret at `~/.routis/secret` instead of raw task text by default. Session records also avoid raw task persistence by storing a task hash and short sanitized preview.
 
 ## Command Reference
 
@@ -175,7 +175,7 @@ Options:
 
 Commands:
   route <task>              Preview the selected route without opening the TUI
-    --explain               Print and store the decision trace tree
+    --explain               Print the decision trace tree; route stores a local trace by default
   context                   Print the repository context summary
   traces                    Print recent decision trace summaries
     --latest                Print the latest full decision trace tree

@@ -205,9 +205,8 @@ fn parse_status_z(bytes: &[u8]) -> Vec<PathBuf> {
         let status = &entry[..2];
         let path = &entry[3..];
         if status[0] == b'R' || status[1] == b'R' || status[0] == b'C' || status[1] == b'C' {
-            if let Some(new_path) = entries.next() {
-                files.push(pathbuf_from_lossy_bytes(new_path));
-            }
+            files.push(pathbuf_from_lossy_bytes(path));
+            let _old_path = entries.next();
         } else {
             files.push(pathbuf_from_lossy_bytes(path));
         }
@@ -425,7 +424,14 @@ mod tests {
 
     #[test]
     fn parses_nul_status_with_spaces_renames_and_untracked_files() {
-        let raw = b" M file with spaces.rs\0R  old name.rs\0new name.rs\0?? fresh file.md\0";
+        let raw = concat!(
+            " M file with spaces.rs\0",
+            "R  new name.rs\0old name.rs\0",
+            "C  copied name.rs\0source name.rs\0",
+            " D deleted file.rs\0",
+            "?? fresh file.md\0"
+        )
+        .as_bytes();
 
         let files = parse_status_z(raw);
 
@@ -434,6 +440,8 @@ mod tests {
             vec![
                 PathBuf::from("file with spaces.rs"),
                 PathBuf::from("new name.rs"),
+                PathBuf::from("copied name.rs"),
+                PathBuf::from("deleted file.rs"),
                 PathBuf::from("fresh file.md"),
             ]
         );

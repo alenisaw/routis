@@ -89,7 +89,8 @@ impl ShellHistory {
 
 #[must_use]
 pub fn recent_sessions(limit: usize) -> Vec<(String, String)> {
-    ShellHistory::load(&default_history_path(), 1000)
+    default_history_path()
+        .and_then(|path| ShellHistory::load(&path, 1000))
         .map(|history| history.recent(limit))
         .unwrap_or_default()
 }
@@ -137,9 +138,8 @@ pub struct HistorySessionItem {
     pub conversation: String,
 }
 
-#[must_use]
-pub fn default_history_path() -> PathBuf {
-    crate::tui::config::routis_dir().join("shell_history")
+pub fn default_history_path() -> anyhow::Result<PathBuf> {
+    Ok(crate::tui::config::routis_dir()?.join("shell_history"))
 }
 
 fn parse_history_line(line: &str) -> Option<(Option<u64>, &str)> {

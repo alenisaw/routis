@@ -15,13 +15,13 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use std::{io::Stdout, time::Duration};
 
 pub async fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
-    let config_path = default_config_path();
+    let config_path = default_config_path()?;
     let mut state = match load_config(&config_path)? {
         Some(config) => AppState::with_config(config),
         None => AppState::setup(),
     };
     sync_repo_context(&mut state);
-    let history_path = default_history_path();
+    let history_path = default_history_path()?;
     let mut history = ShellHistory::load(&history_path, 1000)?;
 
     loop {
@@ -401,7 +401,7 @@ fn confirm_setup(state: &mut AppState) {
         },
         SetupStep::Name => {
             if state.config.display_name.trim().is_empty() {
-                state.config.display_name = "Alen".to_string();
+                state.config.display_name = "User".to_string();
             }
             state.setup.step = SetupStep::Provider;
         }
@@ -569,12 +569,20 @@ fn apply_command(
             state.open_setup();
         }
         Ok(SlashCommand::Config) => {
-            state.ui.status_line = format!("config: {}", default_config_path().display());
+            let config_path = match default_config_path() {
+                Ok(path) => path,
+                Err(error) => {
+                    state.ui.status_line = format!("config error: {error}");
+                    push_status_event(state);
+                    return;
+                }
+            };
+            state.ui.status_line = format!("config: {}", config_path.display());
             push_command_event(
                 state,
                 "Command result",
                 vec![
-                    format!("config: {}", default_config_path().display()),
+                    format!("config: {}", config_path.display()),
                     format!("provider: {}", state.config.provider),
                     format!("model: {}", state.config.model),
                     format!("reasoning: {}", state.config.reasoning),
@@ -596,7 +604,14 @@ fn apply_command(
             record_result = false;
         }
         Ok(SlashCommand::Doctor) => {
-            let config_path = default_config_path();
+            let config_path = match default_config_path() {
+                Ok(path) => path,
+                Err(error) => {
+                    state.ui.status_line = format!("doctor: config path error: {error}");
+                    push_status_event(state);
+                    return;
+                }
+            };
             let config_status = if config_path.exists() {
                 "found"
             } else {
@@ -735,7 +750,15 @@ fn apply_command(
         Ok(SlashCommand::Sessions) => {
             state.ui.status_line = "sessions opened".to_string();
             push_status_event(state);
-            let store = SessionStore::new(default_session_store_path());
+            let store_path = match default_session_store_path() {
+                Ok(path) => path,
+                Err(error) => {
+                    state.ui.status_line = format!("sessions error: {error}");
+                    push_status_event(state);
+                    return;
+                }
+            };
+            let store = SessionStore::new(store_path);
             open_session_picker(state, history, &store);
             record_result = false;
         }
@@ -817,7 +840,9 @@ fn session_store_items(store: &SessionStore) -> Result<Vec<SessionPickerItem>> {
         .into_iter()
         .take(12)
         .map(|session| SessionPickerItem {
-            conversation: session.task,
+            conversation: session
+                .task_preview
+                .unwrap_or_else(|| format!("task {}", &session.task_hash[..12])),
             title: session.title,
             created: session.created_at.to_string(),
             updated: session.updated_at.to_string(),
