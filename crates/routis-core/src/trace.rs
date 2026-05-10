@@ -135,6 +135,7 @@ pub struct ProviderCommandPreview {
 pub struct DecisionTraceInput {
     pub session_id: String,
     pub task_hash: String,
+    pub timestamp_unix_ms: Option<u128>,
     pub selected_model: String,
     pub selected_reasoning: String,
     pub prompt_mode: PromptMode,
@@ -177,7 +178,7 @@ impl DecisionTrace {
             schema_version: DECISION_TRACE_SCHEMA_VERSION,
             session_id: input.session_id,
             task_hash: input.task_hash,
-            timestamp_unix_ms: unix_timestamp_ms(),
+            timestamp_unix_ms: input.timestamp_unix_ms.unwrap_or_else(unix_timestamp_ms),
             language: format!("{:?}", classification.language).to_ascii_lowercase(),
             intent: classification.primary_intent.as_str().to_string(),
             area: classification.area.as_str().to_string(),

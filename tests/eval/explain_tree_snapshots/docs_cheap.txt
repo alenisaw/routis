@@ -1,0 +1,9 @@
+Routis Decision Trace
+Input Analysis
+Intent: docs
+Area: docs
+Route Decision
+Selected profile: cheap
+Prompt mode: preview-only
+Provider command preview: codex
+<task-redacted>

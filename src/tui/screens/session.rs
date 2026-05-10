@@ -4,6 +4,7 @@ use crate::tui::{
     symbols,
     theme::ThemePalette,
     widgets::{
+        decision_trace_panel::render_decision_trace_panel,
         input::render_input,
         palette::{command_palette_height, render_command_palette},
         timeline::render_timeline,
@@ -51,7 +52,7 @@ pub fn render_shell(frame: &mut Frame, area: Rect, state: &AppState, palette: Th
 
     let bounds = frame.area();
     render_header_block(frame, safe_rect(chunks[0], bounds), state, palette);
-    render_timeline(frame, safe_rect(chunks[1], bounds), state, palette);
+    render_body(frame, safe_rect(chunks[1], bounds), state, palette);
     if state.ui.command_palette_open {
         render_command_palette(
             frame,
@@ -67,6 +68,25 @@ pub fn render_shell(frame: &mut Frame, area: Rect, state: &AppState, palette: Th
         );
     }
     render_input_block(frame, safe_rect(chunks[3], bounds), state, palette);
+}
+
+fn render_body(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+
+    if let Some(trace) = state.last_decision_trace.as_ref() {
+        if area.width >= 120 && area.height >= 10 {
+            let chunks =
+                Layout::horizontal([Constraint::Percentage(58), Constraint::Percentage(42)])
+                    .split(area);
+            render_timeline(frame, chunks[0], state, palette);
+            render_decision_trace_panel(frame, chunks[1], palette, trace);
+            return;
+        }
+    }
+
+    render_timeline(frame, area, state, palette);
 }
 
 fn render_header_block(frame: &mut Frame, area: Rect, state: &AppState, palette: ThemePalette) {
@@ -191,7 +211,7 @@ fn render_runtime_line(frame: &mut Frame, area: Rect, state: &AppState, palette:
         Span::styled(state.repo_context.branch.clone(), palette.muted()),
     ];
     let right_text = format!(
-        "context hint {}% {} input {} tk {} output {} tk {} confidence {}%",
+        "context {} {} input {} tk {} output {} tk {} confidence {}",
         state.metrics.context_load_hint,
         symbols::SEP,
         state.metrics.input_tokens,

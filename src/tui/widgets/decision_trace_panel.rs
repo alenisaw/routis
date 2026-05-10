@@ -9,7 +9,6 @@ use routis_core::DecisionTrace;
 
 use crate::tui::theme::ThemePalette;
 
-#[allow(dead_code)]
 pub fn render_decision_trace_panel(
     frame: &mut Frame<'_>,
     area: Rect,
