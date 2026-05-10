@@ -244,7 +244,32 @@ mod tests {
 
     fn env_lock() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
+        LOCK.get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    struct EnvVarGuard {
+        key: &'static str,
+        previous: Option<std::ffi::OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn set_path(key: &'static str, value: &std::path::Path) -> Self {
+            let previous = std::env::var_os(key);
+            std::env::set_var(key, value);
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(previous) = &self.previous {
+                std::env::set_var(self.key, previous);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
     }
 
     #[test]
@@ -264,9 +289,11 @@ mod tests {
     fn trace_json_does_not_contain_raw_task_or_fake_secrets() {
         let _guard = env_lock();
         let home = tempfile::TempDir::new().unwrap();
-        std::env::set_var("ROUTIS_HOME", home.path());
+        let _env_guard = EnvVarGuard::set_path("ROUTIS_HOME", home.path());
+
         let task = "debug auth flow OPENAI_API_KEY=sk-test";
         let decision = route_task(task, Profile::Default).unwrap();
+
         let trace = build_cli_decision_trace(
             task,
             &decision,
@@ -291,8 +318,8 @@ mod tests {
             },
         )
         .unwrap();
+
         let json = serde_json::to_string(&trace).unwrap();
-        std::env::remove_var("ROUTIS_HOME");
 
         assert!(!json.contains(task));
         assert!(!json.contains("sk-test"));
@@ -333,12 +360,13 @@ mod tests {
     fn invalid_trace_secret_length_fails() {
         let _guard = env_lock();
         let home = tempfile::TempDir::new().unwrap();
-        std::env::set_var("ROUTIS_HOME", home.path());
-        std::fs::write(home.path().join("secret"), b"short").unwrap();
+        let _env_guard = EnvVarGuard::set_path("ROUTIS_HOME", home.path());
+
+        let secret_path = crate::paths::routis_dir().unwrap().join("secret");
+        std::fs::write(&secret_path, b"short").unwrap();
 
         let error = load_or_create_trace_secret().unwrap_err().to_string();
 
-        std::env::remove_var("ROUTIS_HOME");
         assert!(error.contains("invalid trace secret length"));
     }
 }

@@ -39,21 +39,57 @@ fn home_dir() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
+    use std::sync::{Mutex, OnceLock};
+
+    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    struct EnvVarGuard {
+        key: &'static str,
+        previous: Option<std::ffi::OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn set_path(key: &'static str, value: &std::path::Path) -> Self {
+            let previous = std::env::var_os(key);
+            std::env::set_var(key, value);
+            Self { key, previous }
+        }
+
+        fn remove(key: &'static str) -> Self {
+            let previous = std::env::var_os(key);
+            std::env::remove_var(key);
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(previous) = &self.previous {
+                std::env::set_var(self.key, previous);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
 
     #[test]
     fn routis_home_override_wins() {
-        let dir = TempDir::new().unwrap();
-        std::env::set_var("ROUTIS_HOME", dir.path());
+        let _guard = env_lock();
+        let dir = tempfile::TempDir::new().unwrap();
+        let _env_guard = EnvVarGuard::set_path("ROUTIS_HOME", dir.path());
 
         assert_eq!(routis_dir().unwrap(), dir.path());
-
-        std::env::remove_var("ROUTIS_HOME");
     }
 
     #[test]
     fn default_path_uses_user_home() {
-        std::env::remove_var("ROUTIS_HOME");
+        let _guard = env_lock();
+        let _env_guard = EnvVarGuard::remove("ROUTIS_HOME");
 
         assert_eq!(
             routis_dir()
