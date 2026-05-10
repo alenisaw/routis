@@ -1,0 +1,42 @@
+[
+  {
+    "task": "check README.md for typos",
+    "expected_profile": "cheap",
+    "expected_reasoning": "low",
+    "expected_intent": "check",
+    "expected_area": "docs",
+    "description": "docs-only check should remain cheap"
+  },
+  {
+    "task": "implement a new parser option",
+    "expected_profile": "balanced",
+    "expected_reasoning": "medium",
+    "expected_intent": "create",
+    "expected_area": "unknown",
+    "description": "ordinary implementation should stay balanced"
+  },
+  {
+    "task": "debug auth flow",
+    "expected_profile": "deep",
+    "expected_reasoning": "high",
+    "expected_intent": "debug",
+    "expected_area": "auth",
+    "description": "auth debugging should require deep profile"
+  },
+  {
+    "task": "redesign the architecture",
+    "expected_profile": "extradeep",
+    "expected_reasoning": "xhigh",
+    "expected_intent": "architecture",
+    "expected_area": "unknown",
+    "description": "architecture redesign should route extradeep"
+  },
+  {
+    "task": "check README later, but the main task is to refactor routing and repo context so long prompts classify correctly",
+    "expected_profile": "deep",
+    "expected_reasoning": "high",
+    "expected_intent": "refactor",
+    "expected_area": "routing",
+    "description": "secondary docs mention must not override routing refactor"
+  }
+]

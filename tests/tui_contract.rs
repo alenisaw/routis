@@ -15,6 +15,14 @@ use routis::tui::{
     },
 };
 
+fn app_version_label() -> String {
+    format!("Routis v{}", env!("CARGO_PKG_VERSION"))
+}
+
+fn setup_version_label() -> String {
+    format!("Routis Setup v{}", env!("CARGO_PKG_VERSION"))
+}
+
 #[test]
 fn setup_flow_is_simple_and_reopenable() {
     let mut state = AppState::setup();
@@ -57,7 +65,7 @@ fn setup_screen_uses_left_mascot_right_copy_and_no_outer_frame() {
     let state = AppState::setup();
     let text = render_to_text(120, 36, &state);
 
-    assert!(text.contains("Routis Setup v0.3.0"));
+    assert!(text.contains(&setup_version_label()));
     assert!(text.contains("Welcome to Routis!"));
     assert!(text.contains("What this setup does"));
     assert!(text.contains("1  Start setup"));
@@ -581,13 +589,13 @@ fn home_header_has_greeting_activity_tracker_and_dotted_internal_dividers() {
     let state = AppState::home();
     let text = render_to_text(150, 44, &state);
 
-    assert!(text.contains("Routis v0.3.0"));
+    assert!(text.contains(&app_version_label()));
     assert!(text.contains("Welcome,"));
     assert!(text.contains("Workspace:"));
     assert!(text.contains("~/"));
     assert!(text.contains("Releases"));
+    assert!(text.contains("v0.4.0 Auditable routing"));
     assert!(text.contains("v0.3.0 Repo context and session store"));
-    assert!(text.contains("v0.2.2 TUI command and layout polish"));
     assert!(text.find("Releases").unwrap() < text.find("Recent Sessions").unwrap());
     assert!(!text.contains("Updates"));
     assert!(text.contains("Activity Tracker"));
@@ -1007,7 +1015,7 @@ fn shortcuts_render_inside_session_area_not_as_overlay() {
     assert!(text.contains("F1"));
     assert!(text.contains("Ctrl+C"));
     assert!(text.contains("Esc"));
-    assert!(text.find("Routis v0.3.0").unwrap() < text.find("Keyboard shortcuts").unwrap());
+    assert!(text.find(&app_version_label()).unwrap() < text.find("Keyboard shortcuts").unwrap());
     assert!(text.find("Keyboard shortcuts").unwrap() < text.find("Type a task").unwrap());
 }
 
@@ -1253,7 +1261,7 @@ fn shell_layout_survives_required_terminal_sizes() {
     ] {
         let text = render_to_text(width, height, &AppState::home());
 
-        assert!(text.contains("Routis v0.3.0"));
+        assert!(text.contains(&app_version_label()));
         assert!(text.contains("Type a task or / for commands"));
         if width >= 100 {
             assert!(
@@ -1273,7 +1281,7 @@ fn shell_layout_survives_required_terminal_sizes() {
 fn shell_too_small_fallback_is_plain_and_safe() {
     let text = render_to_text(79, 23, &AppState::home());
 
-    assert!(text.contains("Routis v0.3.0"));
+    assert!(text.contains(&app_version_label()));
     assert!(text.contains("Terminal too small."));
     assert!(text.contains("80x24"));
 }

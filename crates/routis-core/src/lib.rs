@@ -5,6 +5,12 @@ use serde::{Deserialize, Serialize};
 use std::{fmt, str::FromStr};
 use thiserror::Error;
 
+pub mod trace;
+pub use trace::{
+    DecisionTrace, DecisionTraceInput, MatchedSignal, PromptMode, RepoFact, RouteTree,
+    RouteTreeNode, DECISION_TRACE_SCHEMA_VERSION,
+};
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum RoutingError {
     #[error("unknown policy `{0}`; expected cheap, balanced, deep, extradeep, or default")]
@@ -389,6 +395,14 @@ fn classify_task_for_profile(task: &str) -> Classification {
         resolved_score -= 1;
     }
 
+    if contains_any(
+        &normalized,
+        &["carefully", "thoroughly", "deeply", "comprehensively"],
+    ) {
+        matched.push("up-modifier".to_string());
+        resolved_score += 1;
+    }
+
     if matches!(scope, ScopeKind::RepoWide) {
         matched.push("scope:repo-wide".to_string());
     }
@@ -677,8 +691,11 @@ fn best_intent(scores: &[(IntentKind, i32)]) -> Option<IntentKind> {
 fn best_area(scores: &[(AreaKind, i32)]) -> Option<AreaKind> {
     scores
         .iter()
-        .max_by_key(|(_, score)| *score)
-        .map(|(kind, _)| *kind)
+        .fold(None, |best, (kind, score)| match best {
+            Some((best_kind, best_score)) if best_score >= *score => Some((best_kind, best_score)),
+            _ => Some((*kind, *score)),
+        })
+        .map(|(kind, _)| kind)
 }
 
 fn secondary_intents(scores: &[(IntentKind, i32)], primary: IntentKind) -> Vec<IntentKind> {

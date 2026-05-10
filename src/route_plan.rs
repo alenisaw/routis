@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use routis_context::RepoContext;
-use routis_core::{route_task_with_repo_context, Confidence, Profile};
+use routis_core::{route_task_with_repo_context, Confidence, Profile, RoutingDecision};
 use routis_policy::{apply_policy_rules, PolicyFile};
 use std::{
     path::{Path, PathBuf},
@@ -47,18 +47,37 @@ pub struct LoadedPolicy {
     pub source: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct ExecutionPlanWithDecision {
+    pub plan: ExecutionPlan,
+    pub decision: RoutingDecision,
+    pub repo_context: RepoContext,
+}
+
 pub fn build_execution_plan(
     task: &str,
     policy_path: &str,
     cwd: impl AsRef<Path>,
 ) -> Result<ExecutionPlan> {
+    Ok(build_execution_plan_with_decision(task, policy_path, cwd)?.plan)
+}
+
+pub fn build_execution_plan_with_decision(
+    task: &str,
+    policy_path: &str,
+    cwd: impl AsRef<Path>,
+) -> Result<ExecutionPlanWithDecision> {
     let cwd = cwd.as_ref();
     let repo_root = discover_repo_root(cwd);
     let policy = load_policy(policy_path, repo_root.as_deref())?;
     let repo_context = collect_repo_context_for_cwd(cwd)?;
-    let mut plan = plan_execution(task, &policy.policy, &repo_context)?;
+    let (mut plan, decision) = plan_execution_with_decision(task, &policy.policy, &repo_context)?;
     plan.policy_source = policy.source;
-    Ok(plan)
+    Ok(ExecutionPlanWithDecision {
+        plan,
+        decision,
+        repo_context,
+    })
 }
 
 pub fn collect_repo_context_for_cwd(cwd: impl AsRef<Path>) -> Result<RepoContext> {
@@ -144,18 +163,34 @@ pub fn plan_execution(
     policy: &PolicyFile,
     repo_context: &RepoContext,
 ) -> Result<ExecutionPlan> {
+    Ok(plan_execution_with_decision(task, policy, repo_context)?.0)
+}
+
+fn plan_execution_with_decision(
+    task: &str,
+    policy: &PolicyFile,
+    repo_context: &RepoContext,
+) -> Result<(ExecutionPlan, RoutingDecision)> {
     let mut decision = route_task_with_repo_context(
         task,
         Profile::Default,
         &repo_context.risk_zone_hints,
         repo_context.changed_files.len(),
     )?;
+    let profile_before_policy = decision.effective_profile;
     decision.effective_profile = apply_policy_rules(
         policy,
         decision.effective_profile,
         &repo_context.risk_zone_hints,
         &repo_context.changed_files,
     );
+    if decision.effective_profile != profile_before_policy {
+        decision.signals_matched.push(format!(
+            "policy-profile:{}",
+            decision.effective_profile.as_str()
+        ));
+        decision.explain = route_reason(&decision);
+    }
     let execution = policy
         .execution_config(decision.effective_profile)
         .context("selected profile has no execution config")?;
@@ -165,7 +200,7 @@ pub fn plan_execution(
         impact_area = "repo-wide".to_string();
     }
 
-    Ok(ExecutionPlan {
+    let plan = ExecutionPlan {
         profile: decision.effective_profile.as_str().to_string(),
         model: execution.model.clone(),
         reasoning: execution.reasoning.clone(),
@@ -182,9 +217,22 @@ pub fn plan_execution(
         confidence: decision.classification.confidence.as_str().to_string(),
         context_percent: repo_context.changed_files.len().saturating_mul(6).min(100),
         saved_percent: saved_percent(decision.classification.confidence),
-        reason: decision.explain,
+        reason: decision.explain.clone(),
         policy_source: String::new(),
-    })
+    };
+    Ok((plan, decision))
+}
+
+fn route_reason(decision: &RoutingDecision) -> String {
+    format!(
+        "Auto-selected `{}` for {} / {} / scope {} / confidence {} from signals: {}.",
+        decision.effective_profile,
+        decision.classification.primary_intent.as_str(),
+        decision.classification.area.as_str(),
+        decision.classification.scope.as_str(),
+        decision.classification.confidence.as_str(),
+        decision.signals_matched.join(", ")
+    )
 }
 
 #[must_use]

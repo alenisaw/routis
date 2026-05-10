@@ -1,7 +1,10 @@
 #![forbid(unsafe_code)]
 #![deny(warnings)]
 
-use anyhow::Result;
+mod trace_cli;
+mod trace_store;
+
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use crossterm::{
     execute,
@@ -9,6 +12,7 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use routis::tui::app::run_app;
+use routis_core::RepoFact;
 
 #[derive(Debug, Parser)]
 #[command(name = "routis")]
@@ -26,34 +30,60 @@ struct Args {
 enum Command {
     /// Preview the routing decision without provider execution.
     Route {
+        /// Print the decision tree and store a JSONL trace.
+        #[arg(long)]
+        explain: bool,
+
         /// Task to classify and route.
         task: Vec<String>,
     },
     /// Print repository context summary.
     Context,
+    /// Show local decision traces.
+    Traces {
+        /// Print the latest full trace tree instead of the summary table.
+        #[arg(long)]
+        latest: bool,
+    },
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
     match args.command {
-        Some(Command::Route { task }) => run_route(task),
+        Some(Command::Route { explain, task }) => run_route(task, explain),
         Some(Command::Context) => run_context(),
+        Some(Command::Traces { latest }) => run_traces(latest),
         None => run_tui().await,
     }
 }
 
-fn run_route(task: Vec<String>) -> Result<()> {
+fn run_route(task: Vec<String>, explain: bool) -> Result<()> {
     let task = task.join(" ");
     let task = task.trim();
     if task.is_empty() {
         anyhow::bail!("route task must not be empty");
     }
-    let plan = routis::route_plan::build_execution_plan(
+    let route = routis::route_plan::build_execution_plan_with_decision(
         task,
         routis::route_plan::DEFAULT_POLICY_PATH,
         std::env::current_dir()?,
     )?;
+    let plan = route.plan;
+    let trace = trace_cli::build_cli_decision_trace(
+        task,
+        &route.decision,
+        trace_cli::CliDecisionTraceInput {
+            selected_model: plan.model.clone(),
+            selected_reasoning: plan.reasoning.clone(),
+            execution_mode: "preview".to_string(),
+            provider_command: None,
+            risk_zones: route.repo_context.risk_zone_hints,
+            repo_facts: vec![RepoFact::new("policy-source", plan.policy_source.clone())],
+        },
+    );
+    trace_cli::append_cli_trace(&trace).context("failed to store decision trace")?;
+
     println!("task: {task}");
     println!(
         "selected: {} / {} / {}",
@@ -65,7 +95,19 @@ fn run_route(task: Vec<String>) -> Result<()> {
     println!("risk: {}", plan.risk);
     println!("confidence: {}", plan.confidence);
     println!("reason: {}", plan.reason);
+    if explain {
+        println!();
+        trace_cli::print_trace_tree(&trace);
+    }
     Ok(())
+}
+
+fn run_traces(latest: bool) -> Result<()> {
+    if latest {
+        trace_cli::print_latest_trace()
+    } else {
+        trace_cli::print_trace_list()
+    }
 }
 
 fn run_context() -> Result<()> {

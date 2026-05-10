@@ -60,9 +60,9 @@ Routis combines routing, context control, policy, explainability, and local reco
 | Risk detection | Recognizes sensitive zones such as config, auth, schema, workflow, and package files |
 | Policy control | Applies local routing rules and project-specific overrides |
 | Dry run | Shows the route and command preview before execution |
-| Explain mode | Shows which signals influenced the selected route |
+| Explain mode | Shows a compact Decision Trace tree for the selected route |
 | Sessions | Keeps continuity across related tasks |
-| Traces | Records routing decisions as reviewable local artifacts |
+| Traces | Records routing decisions as local JSONL audit artifacts |
 | Token economy | Reduces unnecessary context, reasoning depth, and repeated work |
 
 ## Profiles
@@ -162,6 +162,8 @@ Enter a task in the input row. Routis plans locally, shows the prompt, provider,
 
 The TUI stores Routis runtime files next to the installed `routis` executable under `.routis`: config in `.routis/config.toml`, prompt history in `.routis/shell_history`, route sessions in `.routis/sessions`, and default policies in `.routis/policies`. Set `ROUTIS_HOME` to override this location. Provider diagnostics locate `codex` from the system PATH and run `codex --version`; on Windows, Routis prefers executable shims such as `.cmd` or `.exe` over blocked PowerShell scripts.
 
+Decision traces are stored as JSONL files under `.routis/traces`. The trace stores a task hash instead of raw task text by default.
+
 ## Command Reference
 
 ```text
@@ -173,7 +175,10 @@ Options:
 
 Commands:
   route <task>              Preview the selected route without opening the TUI
+    --explain               Print and store the decision trace tree
   context                   Print the repository context summary
+  traces                    Print recent decision trace summaries
+    --latest                Print the latest full decision trace tree
 ```
 
 ## Policy File

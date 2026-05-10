@@ -1272,7 +1272,7 @@ checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 
 [[package]]
 name = "routis"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1293,7 +1293,7 @@ dependencies = [
 
 [[package]]
 name = "routis-context"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "routis-core",
  "serde",
@@ -1303,7 +1303,7 @@ dependencies = [
 
 [[package]]
 name = "routis-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "serde",
  "thiserror 1.0.69",
@@ -1311,7 +1311,7 @@ dependencies = [
 
 [[package]]
 name = "routis-policy"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "routis-core",
  "serde",
