@@ -68,22 +68,20 @@ impl ShellHistory {
 
     pub fn save(&self, path: &Path) -> Result<()> {
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("failed to create `{}`", parent.display()))?;
+            crate::private_fs::create_private_dir(parent)?;
         }
-        fs::write(
-            path,
-            self.entries
-                .iter()
-                .zip(self.timestamps.iter())
-                .map(|(entry, timestamp)| match timestamp {
-                    Some(value) => format!("{value}\t{entry}"),
-                    None => entry.clone(),
-                })
-                .collect::<Vec<_>>()
-                .join("\n"),
-        )
-        .with_context(|| format!("failed to write history `{}`", path.display()))
+        let body = self
+            .entries
+            .iter()
+            .zip(self.timestamps.iter())
+            .map(|(entry, timestamp)| match timestamp {
+                Some(value) => format!("{value}\t{entry}"),
+                None => entry.clone(),
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        crate::private_fs::write_private_file(path, body.as_bytes())
+            .with_context(|| format!("failed to write history `{}`", path.display()))
     }
 }
 

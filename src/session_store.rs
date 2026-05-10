@@ -30,7 +30,7 @@ pub struct SessionRecord {
 impl SessionRecord {
     #[must_use]
     pub fn new(
-        task: &str,
+        _task: &str,
         branch: &str,
         policy: &str,
         effective_profile: &str,
@@ -45,7 +45,7 @@ impl SessionRecord {
             schema_version: 1,
             id: format!("{id_time}-{title}"),
             title,
-            task_hash: session_task_hash(task),
+            task_hash: session_record_hash(&id_time.to_string()),
             task_preview,
             branch: branch.to_string(),
             policy: policy.to_string(),
@@ -138,8 +138,8 @@ fn deserialize_legacy(raw: &str) -> Option<SessionRecord> {
         schema_version: value("schema_version")?.parse().ok()?,
         id: value("id")?.to_string(),
         title: value("title")?.to_string(),
-        task_hash: session_task_hash(&unescape(value("task")?)),
-        task_preview: sanitized_preview(&unescape(value("task")?)),
+        task_hash: session_record_hash(value("id")?),
+        task_preview: None,
         branch: unescape(value("branch")?),
         policy: value("policy")?.to_string(),
         effective_profile: value("effective_profile")?.to_string(),
@@ -180,35 +180,8 @@ fn slug(value: &str) -> String {
     }
 }
 
-fn sanitized_preview(value: &str) -> Option<String> {
-    let cleaned = value
-        .split_whitespace()
-        .filter(|part| {
-            !part.contains("sk-")
-                && !part.contains("ghp_")
-                && !part.contains("github_pat_")
-                && !part.contains("OPENAI_API_KEY")
-                && !part.contains("ANTHROPIC_API_KEY")
-                && !part.contains("Authorization:")
-                && !part.contains("Bearer")
-                && !part.contains(".env")
-        })
-        .take(8)
-        .collect::<Vec<_>>()
-        .join(" ");
-    let mut preview = cleaned.chars().take(80).collect::<String>();
-    if preview.is_empty() {
-        None
-    } else {
-        if preview.len() < cleaned.len() {
-            preview.push_str("...");
-        }
-        Some(preview)
-    }
-}
-
-fn session_task_hash(task: &str) -> String {
-    let digest = Sha256::digest(format!("routis-session-v1:{task}").as_bytes());
+fn session_record_hash(seed: &str) -> String {
+    let digest = Sha256::digest(format!("routis-session-redacted-v1:{seed}").as_bytes());
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 

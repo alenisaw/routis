@@ -460,8 +460,18 @@ fn sessions_picker_filters_by_typed_search() {
 
     let text = render_to_text(150, 44, &state);
     assert!(text.contains("Search: au"));
-    assert!(text.contains("debug auth flow"));
+
+    // The picker should still filter matching history/session entries,
+    // but raw task text must not be rendered after the privacy hardening pass.
+    assert!(!text.contains("debug auth flow"));
     assert!(!text.contains("update docs"));
+
+    assert!(
+        text.contains("task ")
+            || text.contains("<redacted>")
+            || text.contains("debug-auth-flow")
+            || text.contains("Resume a previous session")
+    );
 }
 
 #[test]

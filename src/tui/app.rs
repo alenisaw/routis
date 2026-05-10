@@ -689,7 +689,7 @@ fn apply_command(
                 std::env::current_dir().unwrap_or_default(),
             ) {
                 Ok(plan) => vec![
-                    format!("task: {task}"),
+                    "task: <redacted>".to_string(),
                     format!(
                         "selected: {} / {} / {}",
                         plan.profile, plan.model, plan.reasoning

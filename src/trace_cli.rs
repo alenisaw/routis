@@ -170,7 +170,16 @@ fn sanitize_provider_command_preview(
 
 pub fn sanitize_trace_value(value: &str, raw_task: &str) -> String {
     let mut sanitized = value.replace(raw_task, "<task-redacted>");
-    for marker in ["OPENAI_API_KEY=", "ANTHROPIC_API_KEY=", "x-api-key="] {
+    for marker in [
+        "OPENAI_API_KEY=",
+        "ANTHROPIC_API_KEY=",
+        "GITHUB_TOKEN=",
+        "NPM_TOKEN=",
+        "AWS_SECRET_ACCESS_KEY=",
+        "AWS_ACCESS_KEY_ID=",
+        "x-api-key=",
+        "X-API-Key:",
+    ] {
         if let Some(index) = sanitized.find(marker) {
             let end = sanitized[index..]
                 .find(char::is_whitespace)
@@ -193,6 +202,9 @@ pub fn sanitize_trace_value(value: &str, raw_task: &str) -> String {
             if part.starts_with("sk-")
                 || part.starts_with("ghp_")
                 || part.starts_with("github_pat_")
+                || part.starts_with("AKIA")
+                || part.starts_with("npm_")
+                || part.starts_with("xoxb-")
                 || lower.contains(".env")
                 || looks_like_jwt(part)
             {
@@ -203,7 +215,9 @@ pub fn sanitize_trace_value(value: &str, raw_task: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ");
-    if sanitized.contains("-----BEGIN") && sanitized.contains("PRIVATE KEY-----") {
+    if sanitized.contains("-----BEGIN") && sanitized.contains("PRIVATE KEY-----")
+        || sanitized.contains("-----BEGIN OPENSSH PRIVATE KEY-----")
+    {
         sanitized = "<secret-redacted>".to_string();
     }
     if sanitized.len() > 160 {
