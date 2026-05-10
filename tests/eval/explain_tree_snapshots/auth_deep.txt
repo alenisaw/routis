@@ -1,0 +1,8 @@
+Routis Decision Trace
+Input Analysis
+Area: auth
+Route Decision
+Selected profile: deep
+Reasoning: high
+Provider command preview: codex
+<task-redacted>

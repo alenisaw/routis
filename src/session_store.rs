@@ -3,6 +3,7 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     fs,
     path::PathBuf,
@@ -14,7 +15,8 @@ pub struct SessionRecord {
     pub schema_version: u32,
     pub id: String,
     pub title: String,
-    pub task: String,
+    pub task_hash: String,
+    pub task_preview: Option<String>,
     pub branch: String,
     pub policy: String,
     pub effective_profile: String,
@@ -28,7 +30,7 @@ pub struct SessionRecord {
 impl SessionRecord {
     #[must_use]
     pub fn new(
-        task: &str,
+        _task: &str,
         branch: &str,
         policy: &str,
         effective_profile: &str,
@@ -37,12 +39,14 @@ impl SessionRecord {
     ) -> Self {
         let now = now_epoch_seconds();
         let id_time = now_epoch_nanos();
-        let title = slug(task);
+        let task_preview = None;
+        let title = session_title(effective_profile);
         Self {
             schema_version: 1,
             id: format!("{id_time}-{title}"),
             title,
-            task: task.to_string(),
+            task_hash: session_record_hash(&id_time.to_string()),
+            task_preview,
             branch: branch.to_string(),
             policy: policy.to_string(),
             effective_profile: effective_profile.to_string(),
@@ -67,11 +71,10 @@ impl SessionStore {
     }
 
     pub fn save(&self, record: &SessionRecord) -> Result<()> {
-        fs::create_dir_all(&self.path)
-            .with_context(|| format!("failed to create `{}`", self.path.display()))?;
-        fs::write(
-            self.path.join(format!("{}.json", record.id)),
-            serde_json::to_string_pretty(record)?,
+        crate::private_fs::create_private_dir(&self.path)?;
+        crate::private_fs::write_private_file(
+            &self.path.join(format!("{}.json", record.id)),
+            serde_json::to_string_pretty(record)?.as_bytes(),
         )
         .with_context(|| format!("failed to write session `{}`", record.id))
     }
@@ -115,9 +118,8 @@ impl SessionStore {
     }
 }
 
-#[must_use]
-pub fn default_session_store_path() -> PathBuf {
-    crate::tui::config::routis_dir().join("sessions")
+pub fn default_session_store_path() -> Result<PathBuf> {
+    Ok(crate::tui::config::routis_dir()?.join("sessions"))
 }
 
 fn deserialize_record(raw: &str) -> Option<SessionRecord> {
@@ -136,7 +138,8 @@ fn deserialize_legacy(raw: &str) -> Option<SessionRecord> {
         schema_version: value("schema_version")?.parse().ok()?,
         id: value("id")?.to_string(),
         title: value("title")?.to_string(),
-        task: unescape(value("task")?),
+        task_hash: session_record_hash(value("id")?),
+        task_preview: None,
         branch: unescape(value("branch")?),
         policy: value("policy")?.to_string(),
         effective_profile: value("effective_profile")?.to_string(),
@@ -146,6 +149,15 @@ fn deserialize_legacy(raw: &str) -> Option<SessionRecord> {
         updated_at: value("updated_at")?.parse().ok()?,
         routing_count: value("routing_count")?.parse().ok()?,
     })
+}
+
+fn session_title(effective_profile: &str) -> String {
+    let profile = slug(effective_profile);
+    if profile.is_empty() {
+        "route-session".to_string()
+    } else {
+        format!("{profile}-route")
+    }
 }
 
 fn slug(value: &str) -> String {
@@ -166,6 +178,11 @@ fn slug(value: &str) -> String {
     } else {
         slug
     }
+}
+
+fn session_record_hash(seed: &str) -> String {
+    let digest = Sha256::digest(format!("routis-session-redacted-v1:{seed}").as_bytes());
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 fn unescape(value: &str) -> String {
@@ -220,10 +237,10 @@ mod tests {
         let sessions = store.list().unwrap();
 
         assert_eq!(sessions.len(), 2);
-        assert_eq!(sessions[0].title, "debug-auth-flow");
+        assert_eq!(sessions[0].title, "deep-route");
         assert_eq!(sessions[0].branch, "feature/auth");
         assert_eq!(sessions[0].effective_profile, "deep");
-        assert_eq!(sessions[1].title, "first-task");
+        assert_eq!(sessions[1].title, "balanced-route");
     }
 
     #[test]
@@ -241,31 +258,31 @@ mod tests {
         let id_prefix = record.id.chars().take(8).collect::<String>();
         store.save(&record).unwrap();
 
-        assert_eq!(
-            store.find("debug-auth-flow").unwrap().unwrap().id,
-            record.id
-        );
+        assert_eq!(store.find("deep-route").unwrap().unwrap().id, record.id);
         assert_eq!(store.find(&id_prefix).unwrap().unwrap().title, record.title);
         assert!(store.find("missing").unwrap().is_none());
     }
 
     #[test]
-    fn session_store_preserves_literal_backslash_n() {
+    fn session_store_does_not_persist_raw_task() {
         let dir = TempDir::new().unwrap();
         let store = SessionStore::new(dir.path().join("sessions"));
-        let record = SessionRecord::new(
-            r"keep literal \n in task",
-            "main",
-            "default",
-            "balanced",
-            "gpt-5.5",
-            "medium",
-        );
+        let raw_task = r"keep literal \n in task OPENAI_API_KEY=sk-test";
+        let record =
+            SessionRecord::new(raw_task, "main", "default", "balanced", "gpt-5.5", "medium");
 
         store.save(&record).unwrap();
 
+        let raw_json = std::fs::read_to_string(
+            dir.path()
+                .join("sessions")
+                .join(format!("{}.json", record.id)),
+        )
+        .unwrap();
         let stored = store.find(&record.title).unwrap().unwrap();
-        assert_eq!(stored.task, r"keep literal \n in task");
+        assert!(!raw_json.contains(raw_task));
+        assert!(!raw_json.contains("sk-test"));
+        assert_eq!(stored.task_hash.len(), 64);
     }
 
     #[test]
@@ -288,6 +305,7 @@ mod tests {
         );
 
         assert_ne!(first.id, second.id);
+        assert_eq!(first.title, "deep-route");
         assert_eq!(first.title, second.title);
     }
 }

@@ -186,8 +186,8 @@ fn render_activity_tracker(frame: &mut Frame, area: Rect, state: &AppState, pale
         kv_line_width("sessions", "2 shown", area.width, palette),
         kv_line_width("today", "0 done", area.width, palette),
         kv_line_width(
-            "saved",
-            format!("{}%", state.metrics.saved_percent),
+            "confidence",
+            format!("{}%", state.metrics.confidence_hint),
             area.width,
             palette,
         ),
@@ -352,7 +352,7 @@ fn inset_x(area: Rect, left: u16, right: u16) -> Rect {
 
 fn release_notes() -> [&'static str; 2] {
     [
+        "v0.4.0 Auditable routing.",
         "v0.3.0 Repo context and session store.",
-        "v0.2.2 TUI command and layout polish.",
     ]
 }

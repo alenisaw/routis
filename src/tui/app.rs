@@ -12,16 +12,17 @@ use crate::tui::{
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{backend::CrosstermBackend, Terminal};
+use sha2::{Digest, Sha256};
 use std::{io::Stdout, time::Duration};
 
 pub async fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
-    let config_path = default_config_path();
+    let config_path = default_config_path()?;
     let mut state = match load_config(&config_path)? {
         Some(config) => AppState::with_config(config),
         None => AppState::setup(),
     };
     sync_repo_context(&mut state);
-    let history_path = default_history_path();
+    let history_path = default_history_path()?;
     let mut history = ShellHistory::load(&history_path, 1000)?;
 
     loop {
@@ -288,9 +289,9 @@ fn handle_session_picker_key(state: &mut AppState, key: KeyEvent) {
                 close_palette(state, "no sessions to resume");
                 return;
             };
-            state.ui.input = item.conversation.clone();
+            state.ui.input = item.task.clone();
             close_palette(state, "session selected");
-            state.start_session(&item.conversation, item.title);
+            state.start_session(&item.task, item.title);
         }
         _ => {}
     }
@@ -401,7 +402,7 @@ fn confirm_setup(state: &mut AppState) {
         },
         SetupStep::Name => {
             if state.config.display_name.trim().is_empty() {
-                state.config.display_name = "Alen".to_string();
+                state.config.display_name = "User".to_string();
             }
             state.setup.step = SetupStep::Provider;
         }
@@ -569,12 +570,20 @@ fn apply_command(
             state.open_setup();
         }
         Ok(SlashCommand::Config) => {
-            state.ui.status_line = format!("config: {}", default_config_path().display());
+            let config_path = match default_config_path() {
+                Ok(path) => path,
+                Err(error) => {
+                    state.ui.status_line = format!("config error: {error}");
+                    push_status_event(state);
+                    return;
+                }
+            };
+            state.ui.status_line = format!("config: {}", config_path.display());
             push_command_event(
                 state,
                 "Command result",
                 vec![
-                    format!("config: {}", default_config_path().display()),
+                    format!("config: {}", config_path.display()),
                     format!("provider: {}", state.config.provider),
                     format!("model: {}", state.config.model),
                     format!("reasoning: {}", state.config.reasoning),
@@ -596,7 +605,14 @@ fn apply_command(
             record_result = false;
         }
         Ok(SlashCommand::Doctor) => {
-            let config_path = default_config_path();
+            let config_path = match default_config_path() {
+                Ok(path) => path,
+                Err(error) => {
+                    state.ui.status_line = format!("doctor: config path error: {error}");
+                    push_status_event(state);
+                    return;
+                }
+            };
             let config_status = if config_path.exists() {
                 "found"
             } else {
@@ -668,27 +684,29 @@ fn apply_command(
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .unwrap_or("analyze repository routing");
-            let lines = match crate::route_plan::build_execution_plan(
-                task,
-                &state.config.policy_file,
-                std::env::current_dir().unwrap_or_default(),
-            ) {
-                Ok(plan) => vec![
-                    format!("task: {task}"),
-                    format!(
-                        "selected: {} / {} / {}",
-                        plan.profile, plan.model, plan.reasoning
-                    ),
-                    format!("intent: {}", plan.intent),
-                    format!("area: {}", plan.area),
-                    format!("scope: {}", plan.scope),
-                    format!("risk: {}", plan.risk),
-                    format!("confidence: {}", plan.confidence),
-                    format!("reason: {}", plan.reason),
-                ],
+            let lines = match build_tui_decision_trace(task, &state.config.policy_file) {
+                Ok(lines) => lines,
                 Err(error) => vec![format!("route unavailable: {error}")],
             };
-            state.ui.status_line = "route preview generated".to_string();
+            state.ui.status_line = "route preview generated and traced".to_string();
+            push_command_event(state, "Command result", lines);
+            record_result = false;
+        }
+        Ok(SlashCommand::Trace) => {
+            let lines = match latest_tui_trace_tree_lines() {
+                Ok(lines) => lines,
+                Err(error) => vec![format!("trace unavailable: {error}")],
+            };
+            state.ui.status_line = "latest trace loaded".to_string();
+            push_command_event(state, "Command result", lines);
+            record_result = false;
+        }
+        Ok(SlashCommand::Traces) => {
+            let lines = match recent_tui_trace_summary_lines() {
+                Ok(lines) => lines,
+                Err(error) => vec![format!("traces unavailable: {error}")],
+            };
+            state.ui.status_line = "recent traces loaded".to_string();
             push_command_event(state, "Command result", lines);
             record_result = false;
         }
@@ -735,7 +753,15 @@ fn apply_command(
         Ok(SlashCommand::Sessions) => {
             state.ui.status_line = "sessions opened".to_string();
             push_status_event(state);
-            let store = SessionStore::new(default_session_store_path());
+            let store_path = match default_session_store_path() {
+                Ok(path) => path,
+                Err(error) => {
+                    state.ui.status_line = format!("sessions error: {error}");
+                    push_status_event(state);
+                    return;
+                }
+            };
+            let store = SessionStore::new(store_path);
             open_session_picker(state, history, &store);
             record_result = false;
         }
@@ -756,6 +782,100 @@ fn apply_command(
         state.ui.command_palette_index = 0;
     }
     state.ui.history_cursor = None;
+}
+
+fn build_tui_decision_trace(task: &str, policy_file: &str) -> Result<Vec<String>> {
+    let route = crate::route_plan::build_execution_plan_with_decision(
+        task,
+        policy_file,
+        std::env::current_dir().unwrap_or_default(),
+    )?;
+    let plan = route.plan;
+    let trace = crate::trace_cli::build_cli_decision_trace(
+        task,
+        &route.decision,
+        crate::trace_cli::CliDecisionTraceInput {
+            selected_model: plan.model.clone(),
+            selected_reasoning: plan.reasoning.clone(),
+            execution_mode: "preview".to_string(),
+            provider_command_preview: Some(routis_core::ProviderCommandPreview {
+                program: "codex".to_string(),
+                args: vec![
+                    "exec".to_string(),
+                    "-m".to_string(),
+                    plan.model.clone(),
+                    "--reasoning".to_string(),
+                    plan.reasoning.clone(),
+                    "--".to_string(),
+                    "<task-redacted>".to_string(),
+                ],
+            }),
+            policy_source: plan.policy_source.clone(),
+            policy_overrides: route.policy_overrides,
+            risk_zones: route.repo_context.risk_zone_hints,
+            repo_facts: vec![routis_core::RepoFact::new(
+                "policy-source",
+                plan.policy_source.clone(),
+            )],
+        },
+    )?;
+    crate::trace_cli::append_cli_trace(&trace)?;
+
+    let mut lines = vec![
+        format!("task_hash: {}", trace.task_hash),
+        format!(
+            "selected: {} / {} / {}",
+            plan.profile, plan.model, plan.reasoning
+        ),
+        format!("intent: {}", plan.intent),
+        format!("area: {}", plan.area),
+        format!("scope: {}", plan.scope),
+        format!("risk: {}", plan.risk),
+        format!("confidence: {}", plan.confidence),
+        format!("reason: {}", plan.reason),
+        "trace: saved to local JSONL store".to_string(),
+        String::new(),
+    ];
+    lines.extend(trace.render_compact_tree().lines().map(str::to_string));
+    Ok(lines)
+}
+
+fn latest_tui_trace_tree_lines() -> Result<Vec<String>> {
+    let trace = crate::trace_store::latest_trace()?
+        .ok_or_else(|| anyhow::anyhow!("no decision traces found"))?;
+    Ok(trace
+        .render_compact_tree()
+        .lines()
+        .map(str::to_string)
+        .collect())
+}
+
+fn recent_tui_trace_summary_lines() -> Result<Vec<String>> {
+    let report = crate::trace_store::read_trace_summaries(30)?;
+    let mut lines = vec!["Recent Decision Traces".to_string()];
+    if report.summaries.is_empty() {
+        lines.push("no decision traces found".to_string());
+        return Ok(lines);
+    }
+    for item in report.summaries.iter().rev().take(10) {
+        lines.push(format!(
+            "{}  {}  {}  {}/{}  risk {}  conf {}",
+            item.timestamp_unix_ms,
+            item.task_hash.chars().take(12).collect::<String>(),
+            item.selected_profile,
+            item.area,
+            item.intent,
+            item.risk,
+            item.confidence
+        ));
+    }
+    if report.skipped_lines > 0 {
+        lines.push(format!(
+            "skipped corrupt trace lines: {}",
+            report.skipped_lines
+        ));
+    }
+    Ok(lines)
 }
 
 fn sync_repo_context(state: &mut AppState) {
@@ -793,12 +913,16 @@ fn open_session_picker(state: &mut AppState, history: &ShellHistory, store: &Ses
         state.ui.session_picker_all_items = history
             .recent_detailed(12)
             .into_iter()
-            .map(|item| SessionPickerItem {
-                conversation: item.conversation,
-                title: item.title,
-                created: item.created,
-                updated: item.updated,
-                branch: item.branch,
+            .map(|item| {
+                let task = item.conversation;
+                SessionPickerItem {
+                    conversation: redacted_picker_label(&task),
+                    title: redacted_picker_title(&task),
+                    created: item.created,
+                    updated: item.updated,
+                    branch: item.branch,
+                    task,
+                }
             })
             .collect();
     }
@@ -816,12 +940,18 @@ fn session_store_items(store: &SessionStore) -> Result<Vec<SessionPickerItem>> {
         .list()?
         .into_iter()
         .take(12)
-        .map(|session| SessionPickerItem {
-            conversation: session.task,
-            title: session.title,
-            created: session.created_at.to_string(),
-            updated: session.updated_at.to_string(),
-            branch: session.branch,
+        .map(|session| {
+            let conversation = session
+                .task_preview
+                .unwrap_or_else(|| format!("task {}", &session.task_hash[..12]));
+            SessionPickerItem {
+                task: conversation.clone(),
+                conversation,
+                title: session.title,
+                created: session.created_at.to_string(),
+                updated: session.updated_at.to_string(),
+                branch: session.branch,
+            }
         })
         .collect())
 }
@@ -834,6 +964,25 @@ pub fn open_session_picker_for_test(
     open_session_picker(state, history, store);
 }
 
+fn redacted_picker_title(task: &str) -> String {
+    format!("history-{}", short_task_hash(task, 8))
+}
+
+fn redacted_picker_label(task: &str) -> String {
+    format!("task {}", short_task_hash(task, 12))
+}
+
+fn short_task_hash(task: &str, len: usize) -> String {
+    let digest = Sha256::digest(format!("routis-picker-v1:{task}").as_bytes());
+    digest
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()
+        .chars()
+        .take(len)
+        .collect()
+}
+
 fn refresh_session_picker_filter(state: &mut AppState) {
     let query = state.ui.session_picker_query.trim().to_ascii_lowercase();
     state.ui.session_picker_items = state
@@ -844,6 +993,7 @@ fn refresh_session_picker_filter(state: &mut AppState) {
             query.is_empty()
                 || item.conversation.to_ascii_lowercase().contains(&query)
                 || item.title.to_ascii_lowercase().contains(&query)
+                || item.task.to_ascii_lowercase().contains(&query)
         })
         .cloned()
         .collect();

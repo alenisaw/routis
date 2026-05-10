@@ -318,7 +318,9 @@ fn render_setup_choices(frame: &mut Frame, area: Rect, state: &AppState, palette
                 kv_line("theme", &state.config.theme, palette),
                 kv_line(
                     "config",
-                    default_config_path().display().to_string(),
+                    default_config_path()
+                        .map(|path| path.display().to_string())
+                        .unwrap_or_else(|error| error.to_string()),
                     palette,
                 ),
                 sep_line(palette),

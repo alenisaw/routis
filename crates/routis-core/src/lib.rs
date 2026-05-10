@@ -5,6 +5,12 @@ use serde::{Deserialize, Serialize};
 use std::{fmt, str::FromStr};
 use thiserror::Error;
 
+pub mod trace;
+pub use trace::{
+    DecisionTrace, DecisionTraceInput, MatchedSignal, PromptMode, ProviderCommandPreview, RepoFact,
+    RouteTree, RouteTreeNode, DECISION_TRACE_SCHEMA_VERSION,
+};
+
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum RoutingError {
     #[error("unknown policy `{0}`; expected cheap, balanced, deep, extradeep, or default")]
@@ -389,6 +395,14 @@ fn classify_task_for_profile(task: &str) -> Classification {
         resolved_score -= 1;
     }
 
+    if contains_any(
+        &normalized,
+        &["carefully", "thoroughly", "deeply", "comprehensively"],
+    ) {
+        matched.push("up-modifier".to_string());
+        resolved_score += 1;
+    }
+
     if matches!(scope, ScopeKind::RepoWide) {
         matched.push("scope:repo-wide".to_string());
     }
@@ -446,7 +460,15 @@ fn classify_task_for_profile(task: &str) -> Classification {
 }
 
 fn contains_any(text: &str, signals: &[&str]) -> bool {
-    signals.iter().any(|signal| text.contains(signal))
+    signals.iter().any(|signal| term_matches(text, signal))
+}
+
+fn term_matches(text: &str, signal: &str) -> bool {
+    if signal.contains(' ') || signal.contains('/') || signal.len() > 3 {
+        return text.contains(signal);
+    }
+    text.split(|ch: char| !ch.is_alphanumeric() && ch != '_')
+        .any(|token| token == signal)
 }
 
 fn detect_language(task: &str) -> LanguageHint {
@@ -485,22 +507,46 @@ fn score_intents(
         (
             IntentKind::Docs,
             1,
-            &["readme", "docs", "documentation", "changelog"],
+            &[
+                "readme",
+                "docs",
+                "documentation",
+                "changelog",
+                "документация",
+            ],
         ),
         (
             IntentKind::Check,
             1,
-            &["check", "review", "inspect", "verify", "validate"],
+            &[
+                "check",
+                "review",
+                "inspect",
+                "verify",
+                "validate",
+                "проверь",
+                "чекни",
+            ],
         ),
         (
             IntentKind::Fix,
             3,
-            &["fix", "repair", "resolve", "bug", "issue", "broken"],
+            &[
+                "fix",
+                "repair",
+                "resolve",
+                "bug",
+                "issue",
+                "broken",
+                "исправь",
+                "фикс",
+                "пофикси",
+            ],
         ),
         (
             IntentKind::Debug,
             4,
-            &["debug", "trace", "investigate", "root cause"],
+            &["debug", "stack trace", "investigate", "root cause"],
         ),
         (
             IntentKind::Create,
@@ -520,7 +566,7 @@ fn score_intents(
         (
             IntentKind::Test,
             2,
-            &["test", "tests", "coverage", "regression"],
+            &["test", "tests", "coverage", "regression", "тест", "тесты"],
         ),
         (
             IntentKind::Ui,
@@ -535,12 +581,26 @@ fn score_intents(
         (
             IntentKind::Release,
             3,
-            &["release", "version", "changelog", "publish"],
+            &[
+                "release",
+                "version",
+                "changelog",
+                "publish",
+                "релиз",
+                "версия",
+            ],
         ),
         (
             IntentKind::Security,
             5,
-            &["security", "secret", "token", "auth leak"],
+            &[
+                "security",
+                "secret",
+                "token",
+                "auth leak",
+                "безопасность",
+                "уязвимость",
+            ],
         ),
         (
             IntentKind::Migration,
@@ -550,7 +610,12 @@ fn score_intents(
         (
             IntentKind::Architecture,
             6,
-            &["architecture", "system design", "core design"],
+            &[
+                "architecture",
+                "system design",
+                "core design",
+                "архитектура",
+            ],
         ),
     ];
     for (intent, weight, terms) in INTENTS {
@@ -579,12 +644,22 @@ fn score_areas(
         (
             AreaKind::Tests,
             2,
-            &["test", "tests", "coverage", "regression"],
+            &["test", "tests", "coverage", "regression", "тест", "тесты"],
         ),
         (
             AreaKind::Ui,
             3,
-            &["ui", "tui", "layout", "screen", "theme", "colors", "mascot"],
+            &[
+                "ui",
+                "tui",
+                "layout",
+                "screen",
+                "theme",
+                "colors",
+                "mascot",
+                "интерфейс",
+                "экран",
+            ],
         ),
         (
             AreaKind::Api,
@@ -604,12 +679,26 @@ fn score_areas(
         (
             AreaKind::Security,
             5,
-            &["security", "secret", "token", "private key"],
+            &[
+                "security",
+                "secret",
+                "token",
+                "private key",
+                "безопасность",
+                "уязвимость",
+            ],
         ),
         (
             AreaKind::Config,
             3,
-            &["config", "configuration", "settings", "policy file"],
+            &[
+                "config",
+                "configuration",
+                "settings",
+                "policy file",
+                "конфиг",
+                "настройка",
+            ],
         ),
         (
             AreaKind::Build,
@@ -629,7 +718,14 @@ fn score_areas(
         (
             AreaKind::Release,
             3,
-            &["release", "version", "changelog", "publish"],
+            &[
+                "release",
+                "version",
+                "changelog",
+                "publish",
+                "релиз",
+                "версия",
+            ],
         ),
         (
             AreaKind::Routing,
@@ -640,6 +736,8 @@ fn score_areas(
                 "classifier",
                 "classification",
                 "profile",
+                "роутинг",
+                "маршрутизация",
             ],
         ),
         (
@@ -677,8 +775,11 @@ fn best_intent(scores: &[(IntentKind, i32)]) -> Option<IntentKind> {
 fn best_area(scores: &[(AreaKind, i32)]) -> Option<AreaKind> {
     scores
         .iter()
-        .max_by_key(|(_, score)| *score)
-        .map(|(kind, _)| *kind)
+        .fold(None, |best, (kind, score)| match best {
+            Some((best_kind, best_score)) if best_score >= *score => Some((best_kind, best_score)),
+            _ => Some((*kind, *score)),
+        })
+        .map(|(kind, _)| kind)
 }
 
 fn secondary_intents(scores: &[(IntentKind, i32)], primary: IntentKind) -> Vec<IntentKind> {

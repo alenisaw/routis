@@ -15,6 +15,14 @@ use routis::tui::{
     },
 };
 
+fn app_version_label() -> String {
+    format!("Routis v{}", env!("CARGO_PKG_VERSION"))
+}
+
+fn setup_version_label() -> String {
+    format!("Routis Setup v{}", env!("CARGO_PKG_VERSION"))
+}
+
 #[test]
 fn setup_flow_is_simple_and_reopenable() {
     let mut state = AppState::setup();
@@ -57,7 +65,7 @@ fn setup_screen_uses_left_mascot_right_copy_and_no_outer_frame() {
     let state = AppState::setup();
     let text = render_to_text(120, 36, &state);
 
-    assert!(text.contains("Routis Setup v0.3.0"));
+    assert!(text.contains(&setup_version_label()));
     assert!(text.contains("Welcome to Routis!"));
     assert!(text.contains("What this setup does"));
     assert!(text.contains("1  Start setup"));
@@ -325,18 +333,18 @@ fn context_command_records_repo_context_block() {
 #[test]
 fn policy_file_command_updates_tui_config() {
     let mut state = AppState::home();
-    state.ui.input = "/policy-file .routis/policies/default.yaml".to_string();
+    state.ui.input = "/policy-file ~/.routis/policies/default.yaml".to_string();
 
     handle_key_for_test(
         &mut state,
         KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
     );
 
-    assert_eq!(state.config.policy_file, ".routis/policies/default.yaml");
+    assert_eq!(state.config.policy_file, "~/.routis/policies/default.yaml");
     assert!(state.session.events.iter().any(|event| event
         .lines
         .iter()
-        .any(|line| line.contains("policy file: .routis/policies/default.yaml"))));
+        .any(|line| line.contains("policy file: ~/.routis/policies/default.yaml"))));
 }
 
 #[test]
@@ -356,7 +364,8 @@ fn sessions_command_opens_selectable_session_picker() {
     assert!(text.contains("Updated"));
     assert!(text.contains("Branch"));
     assert!(text.contains("Conversation"));
-    assert!(text.contains("second task"));
+    assert!(!text.contains("second task"));
+    assert!(text.contains("task "));
 
     handle_key_with_history_for_test(
         &mut state,
@@ -365,7 +374,7 @@ fn sessions_command_opens_selectable_session_picker() {
     );
 
     assert_eq!(state.mode, AppMode::Session);
-    assert_eq!(state.session.title, "second");
+    assert!(state.session.title.starts_with("history-"));
 }
 
 #[test]
@@ -389,12 +398,16 @@ fn sessions_picker_prefers_session_store_records() {
 
     assert!(state.ui.command_palette_open);
     assert_eq!(state.ui.session_picker_items.len(), 1);
-    assert_eq!(state.ui.session_picker_items[0].title, "debug-auth-flow");
+    assert_ne!(state.ui.session_picker_items[0].title, "debug-auth-flow");
+    assert!(!state.ui.session_picker_items[0].title.trim().is_empty());
     assert_eq!(state.ui.session_picker_items[0].branch, "feature/auth");
-    assert_eq!(
+    assert_ne!(
         state.ui.session_picker_items[0].conversation,
         "debug auth flow"
     );
+    assert!(!state.ui.session_picker_items[0]
+        .conversation
+        .contains("debug auth flow"));
 }
 
 #[test]
@@ -418,7 +431,7 @@ fn sessions_picker_switches_selection_with_arrow_keys() {
     );
 
     assert_eq!(state.mode, AppMode::Session);
-    assert_eq!(state.session.title, "first");
+    assert!(state.session.title.starts_with("history-"));
     assert_eq!(state.session.current_task, "first task");
 }
 
@@ -448,8 +461,12 @@ fn sessions_picker_filters_by_typed_search() {
 
     let text = render_to_text(150, 44, &state);
     assert!(text.contains("Search: au"));
-    assert!(text.contains("debug auth flow"));
+
+    // The picker should still filter by the hidden raw task,
+    // but raw task text must not be rendered.
+    assert!(!text.contains("debug auth flow"));
     assert!(!text.contains("update docs"));
+    assert!(text.contains("task "));
 }
 
 #[test]
@@ -581,17 +598,17 @@ fn home_header_has_greeting_activity_tracker_and_dotted_internal_dividers() {
     let state = AppState::home();
     let text = render_to_text(150, 44, &state);
 
-    assert!(text.contains("Routis v0.3.0"));
+    assert!(text.contains(&app_version_label()));
     assert!(text.contains("Welcome,"));
     assert!(text.contains("Workspace:"));
     assert!(text.contains("~/"));
     assert!(text.contains("Releases"));
+    assert!(text.contains("v0.4.0 Auditable routing"));
     assert!(text.contains("v0.3.0 Repo context and session store"));
-    assert!(text.contains("v0.2.2 TUI command and layout polish"));
     assert!(text.find("Releases").unwrap() < text.find("Recent Sessions").unwrap());
     assert!(!text.contains("Updates"));
     assert!(text.contains("Activity Tracker"));
-    assert!(text.contains("saved"));
+    assert!(text.contains("confidence"));
     assert!(!text.contains("input    "));
     assert!(!text.contains("output   "));
     assert!(text.contains("Recent Sessions"));
@@ -703,9 +720,15 @@ profiles:
 
     assert!(!text.contains("active-session"));
     assert!(!text.contains("debug-auth-flow"));
+    assert!(!text.contains("Prompt: \"debug auth flow\""));
+    assert!(!text.contains("debug auth flow"));
     assert!(text.contains("You"));
     assert!(text.contains("Routis"));
-    assert!(text.contains("Prompt: \"debug auth flow\""));
+    assert!(
+        text.contains("Task: <redacted>")
+            || text.contains("Task text is redacted")
+            || text.contains("Task hash:")
+    );
     assert!(matches!(
         state.current_plan.profile.as_str(),
         "deep" | "extradeep"
@@ -801,7 +824,12 @@ fn session_timeline_follows_bottom_when_new_prompt_starts() {
     );
 
     let text = render_to_text(120, 36, &state);
-    assert!(text.contains("fresh prompt"));
+    assert!(!text.contains("fresh prompt"));
+    assert!(
+        text.contains("Task submitted")
+            || text.contains("Task: <redacted>")
+            || text.contains("Preparing local execution plan")
+    );
     assert!(!text.contains("old event 0"));
 }
 
@@ -947,7 +975,12 @@ fn slash_command_history_survives_next_prompt() {
         .iter()
         .any(|event| event.title == "Command result"));
     let text = render_to_text(150, 44, &state);
-    assert!(text.contains("next task"));
+    assert!(!text.contains("next task"));
+    assert!(
+        text.contains("Task submitted")
+            || text.contains("Task: <redacted>")
+            || text.contains("Preparing local execution plan")
+    );
 }
 
 #[test]
@@ -1007,7 +1040,7 @@ fn shortcuts_render_inside_session_area_not_as_overlay() {
     assert!(text.contains("F1"));
     assert!(text.contains("Ctrl+C"));
     assert!(text.contains("Esc"));
-    assert!(text.find("Routis v0.3.0").unwrap() < text.find("Keyboard shortcuts").unwrap());
+    assert!(text.find(&app_version_label()).unwrap() < text.find("Keyboard shortcuts").unwrap());
     assert!(text.find("Keyboard shortcuts").unwrap() < text.find("Type a task").unwrap());
 }
 
@@ -1253,7 +1286,7 @@ fn shell_layout_survives_required_terminal_sizes() {
     ] {
         let text = render_to_text(width, height, &AppState::home());
 
-        assert!(text.contains("Routis v0.3.0"));
+        assert!(text.contains(&app_version_label()));
         assert!(text.contains("Type a task or / for commands"));
         if width >= 100 {
             assert!(
@@ -1273,7 +1306,7 @@ fn shell_layout_survives_required_terminal_sizes() {
 fn shell_too_small_fallback_is_plain_and_safe() {
     let text = render_to_text(79, 23, &AppState::home());
 
-    assert!(text.contains("Routis v0.3.0"));
+    assert!(text.contains(&app_version_label()));
     assert!(text.contains("Terminal too small."));
     assert!(text.contains("80x24"));
 }

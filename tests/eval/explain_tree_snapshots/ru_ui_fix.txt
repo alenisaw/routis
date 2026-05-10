@@ -1,0 +1,8 @@
+Routis Decision Trace
+Input Analysis
+Intent: fix
+Area: ui
+Route Decision
+Prompt mode: preview-only
+Provider command preview: codex
+<task-redacted>

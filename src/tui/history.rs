@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use sha2::{Digest, Sha256};
 use std::{
     collections::VecDeque,
     fs,
@@ -68,28 +69,33 @@ impl ShellHistory {
 
     pub fn save(&self, path: &Path) -> Result<()> {
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("failed to create `{}`", parent.display()))?;
+            crate::private_fs::create_private_dir(parent)?;
         }
-        fs::write(
-            path,
-            self.entries
-                .iter()
-                .zip(self.timestamps.iter())
-                .map(|(entry, timestamp)| match timestamp {
-                    Some(value) => format!("{value}\t{entry}"),
-                    None => entry.clone(),
-                })
-                .collect::<Vec<_>>()
-                .join("\n"),
-        )
-        .with_context(|| format!("failed to write history `{}`", path.display()))
+        let body = self
+            .entries
+            .iter()
+            .zip(self.timestamps.iter())
+            .map(|(entry, timestamp)| {
+                let entry = redact_persisted_history_entry(entry);
+                match timestamp {
+                    Some(value) => format!("{value}	{entry}"),
+                    None => entry,
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(
+                "
+",
+            );
+        crate::private_fs::write_private_file(path, body.as_bytes())
+            .with_context(|| format!("failed to write history `{}`", path.display()))
     }
 }
 
 #[must_use]
 pub fn recent_sessions(limit: usize) -> Vec<(String, String)> {
-    ShellHistory::load(&default_history_path(), 1000)
+    default_history_path()
+        .and_then(|path| ShellHistory::load(&path, 1000))
         .map(|history| history.recent(limit))
         .unwrap_or_default()
 }
@@ -137,9 +143,8 @@ pub struct HistorySessionItem {
     pub conversation: String,
 }
 
-#[must_use]
-pub fn default_history_path() -> PathBuf {
-    crate::tui::config::routis_dir().join("shell_history")
+pub fn default_history_path() -> anyhow::Result<PathBuf> {
+    Ok(crate::tui::config::routis_dir()?.join("shell_history"))
 }
 
 fn parse_history_line(line: &str) -> Option<(Option<u64>, &str)> {
@@ -154,6 +159,38 @@ fn parse_history_line(line: &str) -> Option<(Option<u64>, &str)> {
         Ok(timestamp) => Some((Some(timestamp), value)),
         Err(_) => Some((None, trimmed)),
     }
+}
+
+fn redact_persisted_history_entry(entry: &str) -> String {
+    let trimmed = entry.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    if let Some(command) = trimmed.strip_prefix('/') {
+        let command_name = command.split_whitespace().next().unwrap_or("");
+        if command_name.is_empty() {
+            return "/".to_string();
+        }
+        if trimmed.split_whitespace().count() <= 1 {
+            format!("/{command_name}")
+        } else {
+            format!("/{command_name} <redacted>")
+        }
+    } else {
+        format!("task {}", short_history_hash(trimmed, 12))
+    }
+}
+
+fn short_history_hash(value: &str, len: usize) -> String {
+    let digest = Sha256::digest(format!("routis-history-v1:{value}").as_bytes());
+    digest
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()
+        .chars()
+        .take(len)
+        .collect()
 }
 
 fn now_epoch_seconds() -> u64 {
@@ -174,5 +211,44 @@ fn relative_time(timestamp: u64, now: u64) -> String {
         60..=3_599 => format!("{}m ago", elapsed / 60),
         3_600..=86_399 => format!("{}h ago", elapsed / 3_600),
         _ => format!("{}d ago", elapsed / 86_400),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn persisted_history_redacts_raw_tasks_and_command_args() {
+        assert_eq!(
+            redact_persisted_history_entry("debug auth flow"),
+            format!("task {}", short_history_hash("debug auth flow", 12))
+        );
+        assert_eq!(redact_persisted_history_entry("/status"), "/status");
+        assert_eq!(
+            redact_persisted_history_entry("/route debug auth flow"),
+            "/route <redacted>"
+        );
+        assert_eq!(
+            redact_persisted_history_entry("/policy-file C:\\Users\\alenk\\secret.yaml"),
+            "/policy-file <redacted>"
+        );
+    }
+
+    #[test]
+    fn saved_history_file_does_not_contain_raw_prompt() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("shell_history");
+        let mut history = ShellHistory::new(10);
+
+        history.push("debug auth flow");
+        history.push("/route debug auth flow");
+
+        history.save(&path).unwrap();
+
+        let raw = std::fs::read_to_string(path).unwrap();
+        assert!(!raw.contains("debug auth flow"));
+        assert!(raw.contains("task "));
+        assert!(raw.contains("/route <redacted>"));
     }
 }

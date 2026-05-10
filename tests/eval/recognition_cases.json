@@ -1,0 +1,20 @@
+[
+  {
+    "task": "исправь TUI layout и trace panel",
+    "expected_intent": "fix",
+    "expected_area": "ui",
+    "description": "Russian UI fix should be recognized as fix/ui"
+  },
+  {
+    "task": "проверь безопасность auth config",
+    "expected_intent": "security",
+    "expected_area": "auth",
+    "description": "Russian security/auth check should preserve auth area"
+  },
+  {
+    "task": "обнови README документацию",
+    "expected_intent": "docs",
+    "expected_area": "docs",
+    "description": "Russian docs update should be docs/docs"
+  }
+]

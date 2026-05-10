@@ -1,5 +1,6 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
+use tempfile::TempDir;
 
 #[test]
 fn help_documents_tui_only_surface() {
@@ -40,4 +41,43 @@ fn route_command_prints_decision_without_tui() {
         .stdout(predicate::str::contains("selected:"))
         .stdout(predicate::str::contains("intent:"))
         .stdout(predicate::str::contains("area: routing"));
+}
+
+#[test]
+fn route_explain_prints_tree_and_writes_trace() {
+    let routis_home = TempDir::new().unwrap();
+    let mut cmd = Command::cargo_bin("routis").unwrap();
+    cmd.env("ROUTIS_HOME", routis_home.path())
+        .args(["route", "--explain", "debug auth flow"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Routis Decision Trace"))
+        .stdout(predicate::str::contains("Selected profile:"));
+
+    let trace_count = std::fs::read_dir(routis_home.path().join("traces"))
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().extension().and_then(|value| value.to_str()) == Some("jsonl"))
+        .count();
+    assert_eq!(trace_count, 1);
+}
+
+#[test]
+fn traces_latest_prints_stored_trace_tree() {
+    let routis_home = TempDir::new().unwrap();
+    Command::cargo_bin("routis")
+        .unwrap()
+        .env("ROUTIS_HOME", routis_home.path())
+        .args(["route", "--explain", "debug auth flow"])
+        .assert()
+        .success();
+
+    Command::cargo_bin("routis")
+        .unwrap()
+        .env("ROUTIS_HOME", routis_home.path())
+        .args(["traces", "--latest"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Routis Decision Trace"))
+        .stdout(predicate::str::contains("Selected profile:"));
 }
