@@ -7,8 +7,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use routis::paths::routis_dir;
-use routis::private_fs;
+use crate::paths::routis_dir;
+use crate::private_fs;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TraceSummary {

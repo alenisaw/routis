@@ -1,9 +1,6 @@
 #![forbid(unsafe_code)]
 #![deny(warnings)]
 
-mod trace_cli;
-mod trace_store;
-
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use crossterm::{
@@ -11,6 +8,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
+use routis::trace_cli;
 use routis::tui::app::run_app;
 use routis_core::{ProviderCommandPreview, RepoFact};
 

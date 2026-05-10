@@ -10,6 +10,8 @@ pub enum SlashCommand {
     Clear,
     Context,
     Route,
+    Trace,
+    Traces,
     PolicyFile,
     History,
     Sessions,
@@ -24,7 +26,7 @@ pub struct CommandSpec {
     pub command: SlashCommand,
 }
 
-pub const COMMANDS: [CommandSpec; 14] = [
+pub const COMMANDS: [CommandSpec; 16] = [
     CommandSpec {
         name: "/status",
         description: "show current provider and shell state",
@@ -66,6 +68,18 @@ pub const COMMANDS: [CommandSpec; 14] = [
         description: "preview route decision without execution",
         shortcut: "",
         command: SlashCommand::Route,
+    },
+    CommandSpec {
+        name: "/trace",
+        description: "show latest decision trace tree",
+        shortcut: "",
+        command: SlashCommand::Trace,
+    },
+    CommandSpec {
+        name: "/traces",
+        description: "show recent decision trace summaries",
+        shortcut: "",
+        command: SlashCommand::Traces,
     },
     CommandSpec {
         name: "/policy-file",

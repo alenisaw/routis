@@ -10,9 +10,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use crate::paths::routis_dir;
+use crate::private_fs;
 use crate::trace_store::{append_trace, latest_trace, read_trace_summaries};
-use routis::paths::routis_dir;
-use routis::private_fs;
 
 type HmacSha256 = Hmac<Sha256>;
 

@@ -684,27 +684,29 @@ fn apply_command(
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .unwrap_or("analyze repository routing");
-            let lines = match crate::route_plan::build_execution_plan(
-                task,
-                &state.config.policy_file,
-                std::env::current_dir().unwrap_or_default(),
-            ) {
-                Ok(plan) => vec![
-                    "task: <redacted>".to_string(),
-                    format!(
-                        "selected: {} / {} / {}",
-                        plan.profile, plan.model, plan.reasoning
-                    ),
-                    format!("intent: {}", plan.intent),
-                    format!("area: {}", plan.area),
-                    format!("scope: {}", plan.scope),
-                    format!("risk: {}", plan.risk),
-                    format!("confidence: {}", plan.confidence),
-                    format!("reason: {}", plan.reason),
-                ],
+            let lines = match build_tui_decision_trace(task, &state.config.policy_file) {
+                Ok(lines) => lines,
                 Err(error) => vec![format!("route unavailable: {error}")],
             };
-            state.ui.status_line = "route preview generated".to_string();
+            state.ui.status_line = "route preview generated and traced".to_string();
+            push_command_event(state, "Command result", lines);
+            record_result = false;
+        }
+        Ok(SlashCommand::Trace) => {
+            let lines = match latest_tui_trace_tree_lines() {
+                Ok(lines) => lines,
+                Err(error) => vec![format!("trace unavailable: {error}")],
+            };
+            state.ui.status_line = "latest trace loaded".to_string();
+            push_command_event(state, "Command result", lines);
+            record_result = false;
+        }
+        Ok(SlashCommand::Traces) => {
+            let lines = match recent_tui_trace_summary_lines() {
+                Ok(lines) => lines,
+                Err(error) => vec![format!("traces unavailable: {error}")],
+            };
+            state.ui.status_line = "recent traces loaded".to_string();
             push_command_event(state, "Command result", lines);
             record_result = false;
         }
@@ -780,6 +782,100 @@ fn apply_command(
         state.ui.command_palette_index = 0;
     }
     state.ui.history_cursor = None;
+}
+
+fn build_tui_decision_trace(task: &str, policy_file: &str) -> Result<Vec<String>> {
+    let route = crate::route_plan::build_execution_plan_with_decision(
+        task,
+        policy_file,
+        std::env::current_dir().unwrap_or_default(),
+    )?;
+    let plan = route.plan;
+    let trace = crate::trace_cli::build_cli_decision_trace(
+        task,
+        &route.decision,
+        crate::trace_cli::CliDecisionTraceInput {
+            selected_model: plan.model.clone(),
+            selected_reasoning: plan.reasoning.clone(),
+            execution_mode: "preview".to_string(),
+            provider_command_preview: Some(routis_core::ProviderCommandPreview {
+                program: "codex".to_string(),
+                args: vec![
+                    "exec".to_string(),
+                    "-m".to_string(),
+                    plan.model.clone(),
+                    "--reasoning".to_string(),
+                    plan.reasoning.clone(),
+                    "--".to_string(),
+                    "<task-redacted>".to_string(),
+                ],
+            }),
+            policy_source: plan.policy_source.clone(),
+            policy_overrides: route.policy_overrides,
+            risk_zones: route.repo_context.risk_zone_hints,
+            repo_facts: vec![routis_core::RepoFact::new(
+                "policy-source",
+                plan.policy_source.clone(),
+            )],
+        },
+    )?;
+    crate::trace_cli::append_cli_trace(&trace)?;
+
+    let mut lines = vec![
+        format!("task_hash: {}", trace.task_hash),
+        format!(
+            "selected: {} / {} / {}",
+            plan.profile, plan.model, plan.reasoning
+        ),
+        format!("intent: {}", plan.intent),
+        format!("area: {}", plan.area),
+        format!("scope: {}", plan.scope),
+        format!("risk: {}", plan.risk),
+        format!("confidence: {}", plan.confidence),
+        format!("reason: {}", plan.reason),
+        "trace: saved to local JSONL store".to_string(),
+        String::new(),
+    ];
+    lines.extend(trace.render_compact_tree().lines().map(str::to_string));
+    Ok(lines)
+}
+
+fn latest_tui_trace_tree_lines() -> Result<Vec<String>> {
+    let trace = crate::trace_store::latest_trace()?
+        .ok_or_else(|| anyhow::anyhow!("no decision traces found"))?;
+    Ok(trace
+        .render_compact_tree()
+        .lines()
+        .map(str::to_string)
+        .collect())
+}
+
+fn recent_tui_trace_summary_lines() -> Result<Vec<String>> {
+    let report = crate::trace_store::read_trace_summaries(30)?;
+    let mut lines = vec!["Recent Decision Traces".to_string()];
+    if report.summaries.is_empty() {
+        lines.push("no decision traces found".to_string());
+        return Ok(lines);
+    }
+    for item in report.summaries.iter().rev().take(10) {
+        lines.push(format!(
+            "{}  {}  {}  {}/{}  risk {}  conf {}",
+            item.timestamp_unix_ms,
+            item.task_hash.chars().take(12).collect::<String>(),
+            item.selected_profile,
+            item.area,
+            item.intent,
+            item.risk,
+            item.confidence
+        ));
+    }
+    if report.skipped_lines > 0 {
+        lines.push(format!(
+            "skipped corrupt trace lines: {}",
+            report.skipped_lines
+        ));
+    }
+    Ok(lines)
 }
 
 fn sync_repo_context(state: &mut AppState) {
