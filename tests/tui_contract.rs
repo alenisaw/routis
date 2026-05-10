@@ -364,7 +364,8 @@ fn sessions_command_opens_selectable_session_picker() {
     assert!(text.contains("Updated"));
     assert!(text.contains("Branch"));
     assert!(text.contains("Conversation"));
-    assert!(text.contains("second task"));
+    assert!(!text.contains("second task"));
+    assert!(text.contains("task "));
 
     handle_key_with_history_for_test(
         &mut state,
@@ -373,7 +374,7 @@ fn sessions_command_opens_selectable_session_picker() {
     );
 
     assert_eq!(state.mode, AppMode::Session);
-    assert_eq!(state.session.title, "second");
+    assert!(state.session.title.starts_with("history-"));
 }
 
 #[test]
@@ -430,7 +431,7 @@ fn sessions_picker_switches_selection_with_arrow_keys() {
     );
 
     assert_eq!(state.mode, AppMode::Session);
-    assert_eq!(state.session.title, "first");
+    assert!(state.session.title.starts_with("history-"));
     assert_eq!(state.session.current_task, "first task");
 }
 
@@ -461,17 +462,11 @@ fn sessions_picker_filters_by_typed_search() {
     let text = render_to_text(150, 44, &state);
     assert!(text.contains("Search: au"));
 
-    // The picker should still filter matching history/session entries,
-    // but raw task text must not be rendered after the privacy hardening pass.
+    // The picker should still filter by the hidden raw task,
+    // but raw task text must not be rendered.
     assert!(!text.contains("debug auth flow"));
     assert!(!text.contains("update docs"));
-
-    assert!(
-        text.contains("task ")
-            || text.contains("<redacted>")
-            || text.contains("debug-auth-flow")
-            || text.contains("Resume a previous session")
-    );
+    assert!(text.contains("task "));
 }
 
 #[test]

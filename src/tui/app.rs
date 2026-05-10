@@ -12,6 +12,7 @@ use crate::tui::{
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{backend::CrosstermBackend, Terminal};
+use sha2::{Digest, Sha256};
 use std::{io::Stdout, time::Duration};
 
 pub async fn run_app(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
@@ -288,9 +289,9 @@ fn handle_session_picker_key(state: &mut AppState, key: KeyEvent) {
                 close_palette(state, "no sessions to resume");
                 return;
             };
-            state.ui.input = item.conversation.clone();
+            state.ui.input = item.task.clone();
             close_palette(state, "session selected");
-            state.start_session(&item.conversation, item.title);
+            state.start_session(&item.task, item.title);
         }
         _ => {}
     }
@@ -816,12 +817,16 @@ fn open_session_picker(state: &mut AppState, history: &ShellHistory, store: &Ses
         state.ui.session_picker_all_items = history
             .recent_detailed(12)
             .into_iter()
-            .map(|item| SessionPickerItem {
-                conversation: item.conversation,
-                title: item.title,
-                created: item.created,
-                updated: item.updated,
-                branch: item.branch,
+            .map(|item| {
+                let task = item.conversation;
+                SessionPickerItem {
+                    conversation: redacted_picker_label(&task),
+                    title: redacted_picker_title(&task),
+                    created: item.created,
+                    updated: item.updated,
+                    branch: item.branch,
+                    task,
+                }
             })
             .collect();
     }
@@ -839,14 +844,18 @@ fn session_store_items(store: &SessionStore) -> Result<Vec<SessionPickerItem>> {
         .list()?
         .into_iter()
         .take(12)
-        .map(|session| SessionPickerItem {
-            conversation: session
+        .map(|session| {
+            let conversation = session
                 .task_preview
-                .unwrap_or_else(|| format!("task {}", &session.task_hash[..12])),
-            title: session.title,
-            created: session.created_at.to_string(),
-            updated: session.updated_at.to_string(),
-            branch: session.branch,
+                .unwrap_or_else(|| format!("task {}", &session.task_hash[..12]));
+            SessionPickerItem {
+                task: conversation.clone(),
+                conversation,
+                title: session.title,
+                created: session.created_at.to_string(),
+                updated: session.updated_at.to_string(),
+                branch: session.branch,
+            }
         })
         .collect())
 }
@@ -859,6 +868,25 @@ pub fn open_session_picker_for_test(
     open_session_picker(state, history, store);
 }
 
+fn redacted_picker_title(task: &str) -> String {
+    format!("history-{}", short_task_hash(task, 8))
+}
+
+fn redacted_picker_label(task: &str) -> String {
+    format!("task {}", short_task_hash(task, 12))
+}
+
+fn short_task_hash(task: &str, len: usize) -> String {
+    let digest = Sha256::digest(format!("routis-picker-v1:{task}").as_bytes());
+    digest
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>()
+        .chars()
+        .take(len)
+        .collect()
+}
+
 fn refresh_session_picker_filter(state: &mut AppState) {
     let query = state.ui.session_picker_query.trim().to_ascii_lowercase();
     state.ui.session_picker_items = state
@@ -869,6 +897,7 @@ fn refresh_session_picker_filter(state: &mut AppState) {
             query.is_empty()
                 || item.conversation.to_ascii_lowercase().contains(&query)
                 || item.title.to_ascii_lowercase().contains(&query)
+                || item.task.to_ascii_lowercase().contains(&query)
         })
         .cloned()
         .collect();

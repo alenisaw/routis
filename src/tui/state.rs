@@ -208,6 +208,7 @@ pub struct SessionPickerItem {
     pub updated: String,
     pub branch: String,
     pub conversation: String,
+    pub task: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
