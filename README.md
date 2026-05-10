@@ -21,20 +21,20 @@
 
 <p align="center">
   <a href="#why-routis">Why Routis</a>
-  | <a href="#capabilities">Capabilities</a>
-  | <a href="#installation">Installation</a>
-  | <a href="#usage">Usage</a>
-  | <a href="#policy-file">Policy File</a>
-  | <a href="#development">Development</a>
+  | <a href="#before--after">Before / After</a>
+  | <a href="#run-routis">Run Routis</a>
+  | <a href="#how-it-works">How it works</a>
+  | <a href="#decision-trace">Decision Trace</a>
+  | <a href="#policy">Policy</a>
 </p>
 
 ---
 
-Routis is an execution-intelligence layer for AI coding workflows.
+Routis is a local routing and audit layer for AI coding workflows.
 
 It adds a deliberate routing step before execution. Given a task, Routis classifies the request, reads repository signals, applies local policy, selects an execution profile, and explains why that route was chosen.
 
-The point is simple: AI-assisted development should not use the same execution path for every task. Small edits should stay lightweight. Risky changes should receive stronger handling. Model choice, reasoning depth, and command shape should be explicit instead of hidden in shell habits.
+The point is simple: AI-assisted development should not use the same execution path for every task. Small edits should stay lightweight. Risky changes should receive stronger handling. Model choice, reasoning depth, and command shape should be explicit instead of hidden in repeated shell habits.
 
 ## Why Routis
 
@@ -43,29 +43,105 @@ AI coding tasks do not all deserve the same execution depth. A typo fix, a focus
 Routis makes that decision explicit:
 
 - **Classify the task** into a clear execution profile.
-- **Keep simple tasks lightweight** with cheaper routing.
-- **Raise effort for risky work** such as debugging, migrations, security, and architecture changes.
-- **Keep command generation inspectable** before execution.
-- **Move model and reasoning choices into policy files** instead of hard-coding them into shell habits.
+- **Read repository context** such as branch, changed files, manifests, tests, workflows, and sensitive areas.
+- **Apply local policy** so model and reasoning choices stay reviewable.
+- **Explain the route** with a compact Decision Trace.
+- **Keep local state privacy-aware** by avoiding raw task text in traces and sessions by default.
 
-## Capabilities
+## Before / After
 
-Routis combines routing, context control, policy, explainability, and local records into one workflow layer.
+Without Routis, developers often choose model, reasoning depth, and command shape manually for every AI coding task. Small and risky changes can end up using the same execution path because the routing decision lives in memory, habit, or ad-hoc shell commands.
 
-| Capability | What it does |
+With Routis, the routing decision becomes a local, inspectable step before the AI agent runs.
+
+| Task | Without Routis | With Routis |
+|---|---|---|
+| `fix typo in README` | Manually decide whether the task deserves a full agent run | `cheap / low` |
+| `add parser tests` | Guess the required reasoning depth | `balanced / medium` |
+| `debug auth flow` | Remember to raise effort for sensitive code | `deep / high` |
+| `redesign routing architecture` | Manually switch to the strongest execution setup | `extradeep / xhigh` |
+
+Example route:
+
+```bash
+routis route --explain "debug auth flow"
+```
+
+```text
+selected: deep / gpt-5.5 / high
+intent: debug
+area: auth
+risk: high
+
+Routis Decision Trace
+├─ Input Analysis
+│  ├─ Intent: debug
+│  ├─ Area: auth
+│  └─ Risk: high
+└─ Route Decision
+   ├─ Selected profile: deep
+   ├─ Model: gpt-5.5
+   └─ Reasoning: high
+```
+
+Instead of relying on shell habits, Routis gives the route, the reason, and the selected execution profile before work begins.
+
+## Run Routis
+
+Install from crates.io:
+
+```bash
+cargo install routis
+```
+
+Install from source:
+
+```bash
+git clone https://github.com/alenisaw/routis.git
+cd routis
+cargo install --path .
+```
+
+Open the interactive terminal UI:
+
+```bash
+routis
+```
+
+Preview a route from the CLI:
+
+```bash
+routis route "debug auth flow"
+```
+
+Print the route explanation tree:
+
+```bash
+routis route --explain "debug auth flow"
+```
+
+Inspect recent local traces:
+
+```bash
+routis traces
+routis traces --latest
+```
+
+Cargo installs the binary into Cargo's bin directory, usually `~/.cargo/bin` on Linux/macOS and `%USERPROFILE%\.cargo\bin` on Windows. Make sure that directory is on `PATH`.
+
+## How it works
+
+Routis combines task classification, repository context, local policy, and execution profiles.
+
+| Step | What happens |
 |---|---|
-| Adaptive routing | Selects a fitting execution profile for the task |
-| Routing IR | Classifies English prompts by intent, area, scope, risk, confidence, and target hints |
-| Context control | Summarizes branch, changed files, manifests, docs, tests, workflows, and instruction files |
-| Risk detection | Recognizes sensitive zones such as config, auth, schema, workflow, and package files |
-| Policy control | Applies local routing rules and project-specific overrides |
-| Dry run | Shows the route and command preview before execution |
-| Explain mode | Shows a compact Decision Trace tree for the selected route |
-| Sessions | Keeps continuity across related tasks |
-| Traces | Records routing decisions as local JSONL audit artifacts |
-| Token economy | Reduces unnecessary context, reasoning depth, and repeated work |
+| Classify | Detects intent, area, scope, risk, confidence, and target hints |
+| Inspect | Reads branch, changed files, manifests, docs, tests, workflows, and risk zones |
+| Apply policy | Uses local rules to raise or cap the selected profile |
+| Select route | Chooses profile, model, and reasoning depth |
+| Explain | Builds a local Decision Trace for the route |
 
-## Profiles
+Profiles are intentionally simple:
 
 | Profile | Typical use |
 |---|---|
@@ -73,169 +149,44 @@ Routis combines routing, context control, policy, explainability, and local reco
 | `balanced` | Ordinary implementation, tests, focused refactors |
 | `deep` | Debugging, migrations, edge cases, security-sensitive work |
 | `extradeep` | Redesigns, rewrites, architecture-level changes |
-| `default` | Automatic selection from task wording |
+| `default` | Automatic selection from task wording and repository context |
 
-## Installation
+## Decision Trace
 
-Build from source:
-
-```bash
-git clone https://github.com/alenisaw/routis.git
-cd routis
-cargo build --release
-```
-
-Run the compiled binary:
-
-```bash
-./target/release/routis --help
-```
-
-Install locally from the repository:
-
-```bash
-cargo install --path .
-```
-
-After local installation, the binary is available as `routis`:
-
-```bash
-routis
-```
-
-Running `routis` without a task opens the interactive TUI console. Cargo installs the binary into Cargo's bin directory, usually `~/.cargo/bin` on Linux/macOS and `%USERPROFILE%\.cargo\bin` on Windows. Make sure that directory is on `PATH`.
-
-## Usage
-
-Open the interactive terminal shell:
-
-```bash
-routis
-```
-
-The TUI starts when no task is passed. It provides:
-
-- a responsive dashboard with provider, model, reasoning, metrics, updates, and recent sessions;
-- a timeline for command results and local execution previews;
-- a slash command palette;
-- searchable session selection;
-- inline theme and provider pickers;
-- provider diagnostics for the local Codex CLI.
-
-Useful TUI keys:
-
-| Key | Action |
-|---|---|
-| `/` | Open the command palette |
-| `Enter` | Submit input or confirm the selected item |
-| `Esc` | Close the current palette, picker, or session view |
-| `Ctrl+C` | Cancel the current task or clear input |
-| `Ctrl+D` | Exit Routis |
-| `F1` | Toggle keyboard shortcuts |
-
-Useful TUI commands:
-
-| Command | What it does |
-|---|---|
-| `/help` | Show keyboard shortcuts |
-| `/status` | Show provider, model, reasoning, and theme |
-| `/setup` | Open the local setup flow |
-| `/doctor` | Check Codex CLI availability, version, auth status, and config path |
-| `/provider` | Open the provider picker and diagnostics |
-| `/theme` | Open the theme picker with live preview |
-| `/sessions` | Open searchable recent-session selection |
-| `/history` | Show local history status |
-| `/context` | Show branch, changed files, area, and repo map markers |
-| `/route <task>` | Preview the selected route without executing |
-| `/policy-file <path>` | Set the routing policy file for this shell |
-| `/clear` | Clear the current TUI timeline |
-| `/config` | Show the local config path |
-| `/quit` | Exit Routis |
-
-Launch the TUI:
-
-```bash
-routis
-```
-
-Enter a task in the input row. Routis plans locally, shows the prompt, provider, model and reasoning, selected area, branch, changed file count, and confidence, then waits for `proceed`, `edit`, or `cancel`.
-
-The TUI stores persistent Routis runtime files under `~/.routis` by default: TOML config in `~/.routis/config.toml`, prompt history in `~/.routis/shell_history`, route sessions in `~/.routis/sessions`, and default policies in `~/.routis/policies`. Set `ROUTIS_HOME` to override this location. If the user home directory cannot be resolved, Routis returns an explicit error instead of falling back to a local `.routis` directory. Provider diagnostics locate `codex` from the system PATH and run `codex --version`; on Windows, Routis prefers executable shims such as `.cmd` or `.exe` over blocked PowerShell scripts.
-
-Decision traces are stored as JSONL files under `~/.routis/traces`. The trace stores an HMAC-SHA256 task hash using a per-install 32-byte secret at `~/.routis/secret` instead of raw task text by default. Session records also avoid raw task persistence by storing a task hash and short sanitized preview.
-
-## Command Reference
+Routis can store routing decisions as local JSONL traces under:
 
 ```text
-routis
-
-Options:
-  -h, --help                Print help
-  -V, --version             Print version
-
-Commands:
-  route <task>              Preview the selected route without opening the TUI
-    --explain               Print the decision trace tree; route stores a local trace by default
-  context                   Print the repository context summary
-  traces                    Print recent decision trace summaries
-    --latest                Print the latest full decision trace tree
+~/.routis/traces/<session_id>.jsonl
 ```
 
-## Policy File
+Decision Trace is designed for local auditability: it records the selected route, matched signals, repository facts, policy source, selected model, and reasoning level.
 
-Default policy file: `~/.routis/policies/default.yaml`.
+By default, Routis avoids raw task text in trace and session records. CLI traces store an HMAC-SHA256 task hash using a per-install local secret at:
 
-```yaml
-version: 1
-
-profiles:
-  cheap:
-    model: gpt-5.4-mini
-    reasoning: low
-
-  balanced:
-    model: gpt-5.5
-    reasoning: medium
-
-  deep:
-    model: gpt-5.5
-    reasoning: high
-
-  extradeep:
-    model: gpt-5.5
-    reasoning: xhigh
-
-rules:
-  - if_risk_zone: auth
-    min_profile: deep
-  - if_risk_zone: schema
-    min_profile: deep
-  - if_risk_zone: workflow
-    min_profile: deep
-  - if_risk_zone: package
-    min_profile: deep
-  - if_path: README.md
-    max_profile: cheap
+```text
+~/.routis/secret
 ```
 
-Policy rules apply to the automatic TUI route planner. A rule must define `if_risk_zone` or `if_path`; empty matchers are rejected.
+Runtime files live under `~/.routis` by default. Set `ROUTIS_HOME` to override this location.
 
-## Development
+## Policy
 
-Run checks:
+Routis behavior is controlled through local policy.
 
-```bash
-cargo fmt --check
-cargo clippy -- -D warnings
-cargo test
-cargo build --release
+Default policy path:
+
+```text
+~/.routis/policies/default.yaml
 ```
 
-Run locally:
+| Policy control | Example |
+|---|---|
+| Profile model | `cheap → gpt-5.4-mini` |
+| Reasoning depth | `deep → high` |
+| Risk escalation | `auth → at least deep` |
+| Path cap | `README.md → at most cheap` |
 
-```bash
-cargo run
-```
+Policy rules keep routing behavior local, reviewable, and project-specific. The default policy can be replaced with a custom YAML file when a repository needs different routing rules.
 
 ## License
 
