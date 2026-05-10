@@ -180,33 +180,43 @@ fn is_git_repository(cwd: &Path) -> Result<bool, ContextError> {
 }
 
 fn changed_files(cwd: &Path) -> Result<Vec<PathBuf>, ContextError> {
-    let output = run_git(cwd, ["status", "--porcelain", "--untracked-files=all"])?;
+    let output = run_git(
+        cwd,
+        ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+    )?;
     if !output.status.success() {
         return Ok(Vec::new());
     }
-    let mut files = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .filter_map(parse_status_path)
-        .map(PathBuf::from)
-        .collect::<Vec<_>>();
+    let mut files = parse_status_z(&output.stdout);
     files.sort();
     files.dedup();
     Ok(files)
 }
 
-fn parse_status_path(line: &str) -> Option<&str> {
-    if line.len() < 4 {
-        return None;
+fn parse_status_z(bytes: &[u8]) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    let mut entries = bytes
+        .split(|byte| *byte == 0)
+        .filter(|entry| !entry.is_empty());
+    while let Some(entry) = entries.next() {
+        if entry.len() < 4 {
+            continue;
+        }
+        let status = &entry[..2];
+        let path = &entry[3..];
+        if status[0] == b'R' || status[1] == b'R' || status[0] == b'C' || status[1] == b'C' {
+            if let Some(new_path) = entries.next() {
+                files.push(pathbuf_from_lossy_bytes(new_path));
+            }
+        } else {
+            files.push(pathbuf_from_lossy_bytes(path));
+        }
     }
-    let path = line.get(3..)?.trim();
-    if path.is_empty() {
-        return None;
-    }
-    Some(
-        path.rsplit_once(" -> ")
-            .map_or(path, |(_, after)| after)
-            .trim(),
-    )
+    files
+}
+
+fn pathbuf_from_lossy_bytes(bytes: &[u8]) -> PathBuf {
+    PathBuf::from(String::from_utf8_lossy(bytes).to_string())
 }
 
 fn current_branch(cwd: &Path) -> Result<Option<String>, ContextError> {
@@ -411,6 +421,22 @@ mod tests {
         assert!(context.changed_files.is_empty());
         assert!(context.file_extension_spread.is_empty());
         assert!(context.risk_zone_hints.is_empty());
+    }
+
+    #[test]
+    fn parses_nul_status_with_spaces_renames_and_untracked_files() {
+        let raw = b" M file with spaces.rs\0R  old name.rs\0new name.rs\0?? fresh file.md\0";
+
+        let files = parse_status_z(raw);
+
+        assert_eq!(
+            files,
+            vec![
+                PathBuf::from("file with spaces.rs"),
+                PathBuf::from("new name.rs"),
+                PathBuf::from("fresh file.md"),
+            ]
+        );
     }
 
     fn git<const N: usize>(

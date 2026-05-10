@@ -52,6 +52,7 @@ pub struct ExecutionPlanWithDecision {
     pub plan: ExecutionPlan,
     pub decision: RoutingDecision,
     pub repo_context: RepoContext,
+    pub policy_overrides: Vec<String>,
 }
 
 pub fn build_execution_plan(
@@ -71,12 +72,14 @@ pub fn build_execution_plan_with_decision(
     let repo_root = discover_repo_root(cwd);
     let policy = load_policy(policy_path, repo_root.as_deref())?;
     let repo_context = collect_repo_context_for_cwd(cwd)?;
-    let (mut plan, decision) = plan_execution_with_decision(task, &policy.policy, &repo_context)?;
+    let (mut plan, decision, policy_overrides) =
+        plan_execution_with_decision(task, &policy.policy, &repo_context)?;
     plan.policy_source = policy.source;
     Ok(ExecutionPlanWithDecision {
         plan,
         decision,
         repo_context,
+        policy_overrides,
     })
 }
 
@@ -170,7 +173,7 @@ fn plan_execution_with_decision(
     task: &str,
     policy: &PolicyFile,
     repo_context: &RepoContext,
-) -> Result<(ExecutionPlan, RoutingDecision)> {
+) -> Result<(ExecutionPlan, RoutingDecision, Vec<String>)> {
     let mut decision = route_task_with_repo_context(
         task,
         Profile::Default,
@@ -178,13 +181,26 @@ fn plan_execution_with_decision(
         repo_context.changed_files.len(),
     )?;
     let profile_before_policy = decision.effective_profile;
+    let target_hints = decision
+        .classification
+        .targets
+        .iter()
+        .map(|target| PathBuf::from(&target.value))
+        .collect::<Vec<_>>();
     decision.effective_profile = apply_policy_rules(
         policy,
         decision.effective_profile,
         &repo_context.risk_zone_hints,
         &repo_context.changed_files,
+        &target_hints,
     );
+    let mut policy_overrides = Vec::new();
     if decision.effective_profile != profile_before_policy {
+        policy_overrides.push(format!(
+            "{}->{}",
+            profile_before_policy.as_str(),
+            decision.effective_profile.as_str()
+        ));
         decision.signals_matched.push(format!(
             "policy-profile:{}",
             decision.effective_profile.as_str()
@@ -220,7 +236,7 @@ fn plan_execution_with_decision(
         reason: decision.explain.clone(),
         policy_source: String::new(),
     };
-    Ok((plan, decision))
+    Ok((plan, decision, policy_overrides))
 }
 
 fn route_reason(decision: &RoutingDecision) -> String {
@@ -337,5 +353,44 @@ mod tests {
         assert!(message.contains("failed to load policy file"));
         assert!(message.contains("default.yaml"));
         assert!(!message.contains("embedded default policy"));
+    }
+
+    #[test]
+    fn repo_context_is_collected_from_repo_root_for_nested_cwd() {
+        let repo = TempDir::new().unwrap();
+        run_git(repo.path(), ["init"]).unwrap();
+        run_git(repo.path(), ["config", "user.email", "routis@example.test"]).unwrap();
+        run_git(repo.path(), ["config", "user.name", "Routis Test"]).unwrap();
+        fs::write(
+            repo.path().join("Cargo.toml"),
+            "[package]\nname='demo'\nversion='0.1.0'\n",
+        )
+        .unwrap();
+        fs::create_dir_all(repo.path().join("src/nested")).unwrap();
+        fs::write(repo.path().join("src/nested/mod.rs"), "pub fn demo() {}\n").unwrap();
+        run_git(repo.path(), ["add", "."]).unwrap();
+        run_git(repo.path(), ["commit", "-m", "initial"]).unwrap();
+        fs::write(repo.path().join("README.md"), "changed\n").unwrap();
+
+        let context = collect_repo_context_for_cwd(repo.path().join("src/nested")).unwrap();
+
+        assert!(context.repo_markers.contains(&"rust".to_string()));
+        assert!(context.manifests.contains(&PathBuf::from("Cargo.toml")));
+        assert!(context.changed_files.contains(&PathBuf::from("README.md")));
+    }
+
+    fn run_git<const N: usize>(
+        cwd: &Path,
+        args: [&str; N],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let output = std::process::Command::new("git")
+            .args(args)
+            .current_dir(cwd)
+            .output()?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(String::from_utf8_lossy(&output.stderr).to_string().into())
+        }
     }
 }

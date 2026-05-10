@@ -38,5 +38,29 @@
     "expected_intent": "refactor",
     "expected_area": "routing",
     "description": "secondary docs mention must not override routing refactor"
+  },
+  {
+    "task": "исправь TUI экран и layout",
+    "expected_profile": "balanced",
+    "expected_reasoning": "medium",
+    "expected_intent": "fix",
+    "expected_area": "ui",
+    "description": "russian mixed UI fix should classify as fix ui"
+  },
+  {
+    "task": "проверь безопасность и уязвимость в конфиге",
+    "expected_profile": "extradeep",
+    "expected_reasoning": "xhigh",
+    "expected_intent": "security",
+    "expected_area": "security",
+    "description": "russian security prompt should classify as security"
+  },
+  {
+    "task": "socialize release notes",
+    "expected_profile": "deep",
+    "expected_reasoning": "high",
+    "expected_intent": "release",
+    "expected_area": "release",
+    "description": "short ci token must not match inside unrelated words"
   }
 ]

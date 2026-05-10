@@ -2,17 +2,19 @@
 
 Decision Trace is the v0.4.0 audit layer for Routis routing decisions.
 
-It records why a route was selected without storing raw task text by default. The raw task is represented as a stable FNV-1a hash. Full prompts remain out of trace files unless a later explicit privacy mode enables them.
+It records why a route was selected without storing raw task text by default. The raw task is represented as an HMAC-SHA256 hash using a per-install secret stored under Routis home. Full prompts remain out of trace files unless a later explicit privacy mode enables them.
 
 ## Storage
 
 Traces are stored as JSONL files:
 
 ```text
-.routis/traces/<session_id>.jsonl
+~/.routis/traces/<session_id>.jsonl
 ```
 
 Each line is one `DecisionTrace` record.
+
+`ROUTIS_HOME` overrides the default `~/.routis` location. On Unix, Routis creates the trace directory with `0700` permissions and trace/secret files with `0600` permissions. On Windows, Routis uses normal filesystem creation and relies on the user's profile ACLs.
 
 ## Schema
 
@@ -38,7 +40,9 @@ selected_model
 selected_reasoning
 prompt_mode
 execution_mode
-provider_command
+policy_source
+policy_overrides
+provider_command_preview
 route_tree
 ```
 
@@ -54,16 +58,22 @@ Routis Decision Trace
 │  ├─ Area: auth
 │  ├─ Scope: focused
 │  ├─ Risk: high
-│  └─ Confidence: high
+│  ├─ Confidence: high
+│  └─ Target: -
 ├─ Matched Signals
 │  ├─ intent: debug
 │  └─ area: auth
 ├─ Repo Context
+│  ├─ Policy source: embedded default policy
+│  └─ risk-zone: auth
 └─ Route Decision
    ├─ Requested profile: default
    ├─ Selected profile: deep
    ├─ Model: gpt-5.5
-   └─ Reasoning: high
+   ├─ Reasoning: high
+   ├─ Prompt mode: raw
+   ├─ Execution mode: preview
+   └─ Provider command preview: codex ["exec", "-m", "gpt-5.5", "--reasoning", "high", "--", "<task-redacted>"]
 ```
 
 ## Commands

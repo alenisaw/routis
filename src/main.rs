@@ -12,7 +12,7 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 use routis::tui::app::run_app;
-use routis_core::RepoFact;
+use routis_core::{ProviderCommandPreview, RepoFact};
 
 #[derive(Debug, Parser)]
 #[command(name = "routis")]
@@ -77,11 +77,24 @@ fn run_route(task: Vec<String>, explain: bool) -> Result<()> {
             selected_model: plan.model.clone(),
             selected_reasoning: plan.reasoning.clone(),
             execution_mode: "preview".to_string(),
-            provider_command: None,
+            provider_command_preview: Some(ProviderCommandPreview {
+                program: "codex".to_string(),
+                args: vec![
+                    "exec".to_string(),
+                    "-m".to_string(),
+                    plan.model.clone(),
+                    "--reasoning".to_string(),
+                    plan.reasoning.clone(),
+                    "--".to_string(),
+                    "<task-redacted>".to_string(),
+                ],
+            }),
+            policy_source: plan.policy_source.clone(),
+            policy_overrides: route.policy_overrides,
             risk_zones: route.repo_context.risk_zone_hints,
             repo_facts: vec![RepoFact::new("policy-source", plan.policy_source.clone())],
         },
-    );
+    )?;
     trace_cli::append_cli_trace(&trace).context("failed to store decision trace")?;
 
     println!("task: {task}");

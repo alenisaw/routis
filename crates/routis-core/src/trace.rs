@@ -25,18 +25,27 @@ impl PromptMode {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MatchedSignal {
-    pub kind: String,
-    pub value: String,
+    pub name: String,
+    pub source: String,
     pub weight: i32,
+    pub effect: String,
+    pub evidence: Option<String>,
 }
 
 impl MatchedSignal {
     #[must_use]
-    pub fn new(kind: impl Into<String>, value: impl Into<String>, weight: i32) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        source: impl Into<String>,
+        weight: i32,
+        effect: impl Into<String>,
+    ) -> Self {
         Self {
-            kind: kind.into(),
-            value: value.into(),
+            name: name.into(),
+            source: source.into(),
             weight,
+            effect: effect.into(),
+            evidence: None,
         }
     }
 }
@@ -110,19 +119,29 @@ pub struct DecisionTrace {
     pub selected_reasoning: String,
     pub prompt_mode: PromptMode,
     pub execution_mode: String,
-    pub provider_command: Option<String>,
+    pub policy_source: String,
+    pub policy_overrides: Vec<String>,
+    pub provider_command_preview: Option<ProviderCommandPreview>,
     pub route_tree: RouteTree,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProviderCommandPreview {
+    pub program: String,
+    pub args: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecisionTraceInput {
     pub session_id: String,
-    pub task: String,
+    pub task_hash: String,
     pub selected_model: String,
     pub selected_reasoning: String,
     pub prompt_mode: PromptMode,
     pub execution_mode: String,
-    pub provider_command: Option<String>,
+    pub policy_source: String,
+    pub policy_overrides: Vec<String>,
+    pub provider_command_preview: Option<ProviderCommandPreview>,
     pub risk_zones: Vec<RiskZone>,
     pub repo_facts: Vec<RepoFact>,
 }
@@ -141,19 +160,23 @@ impl DecisionTrace {
             .iter()
             .map(|zone| zone.as_str().to_string())
             .collect::<Vec<_>>();
-        let route_tree = build_route_tree(
+        let route_tree = build_route_tree(RouteTreeInput {
             decision,
-            &matched_signals,
-            &risk_zones,
-            &input.repo_facts,
-            &input.selected_model,
-            &input.selected_reasoning,
-        );
+            matched_signals: &matched_signals,
+            risk_zones: &risk_zones,
+            repo_facts: &input.repo_facts,
+            selected_model: &input.selected_model,
+            selected_reasoning: &input.selected_reasoning,
+            prompt_mode: input.prompt_mode.as_str(),
+            execution_mode: &input.execution_mode,
+            policy_source: &input.policy_source,
+            provider_command_preview: input.provider_command_preview.as_ref(),
+        });
 
         Self {
             schema_version: DECISION_TRACE_SCHEMA_VERSION,
             session_id: input.session_id,
-            task_hash: fnv1a64_hex(&input.task),
+            task_hash: input.task_hash,
             timestamp_unix_ms: unix_timestamp_ms(),
             language: format!("{:?}", classification.language).to_ascii_lowercase(),
             intent: classification.primary_intent.as_str().to_string(),
@@ -170,7 +193,9 @@ impl DecisionTrace {
             selected_reasoning: input.selected_reasoning,
             prompt_mode: input.prompt_mode,
             execution_mode: input.execution_mode,
-            provider_command: input.provider_command,
+            policy_source: input.policy_source,
+            policy_overrides: input.policy_overrides,
+            provider_command_preview: input.provider_command_preview,
             route_tree,
         }
     }
@@ -181,16 +206,6 @@ impl DecisionTrace {
     }
 }
 
-#[must_use]
-pub fn fnv1a64_hex(input: &str) -> String {
-    let mut hash: u64 = 0xcbf29ce484222325;
-    for byte in input.as_bytes() {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
-    format!("{hash:016x}")
-}
-
 fn unix_timestamp_ms() -> u128 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -199,33 +214,56 @@ fn unix_timestamp_ms() -> u128 {
 
 fn signal_to_matched_signal(signal: &str) -> MatchedSignal {
     if let Some((kind, value)) = signal.split_once(':') {
-        MatchedSignal::new(kind, value, 1)
+        MatchedSignal::new(value, kind, 1, signal_effect(kind))
     } else {
-        MatchedSignal::new("signal", signal, 1)
+        MatchedSignal::new(signal, "classifier", 1, "evidence")
     }
 }
 
-fn build_route_tree(
-    decision: &RoutingDecision,
-    matched_signals: &[MatchedSignal],
-    risk_zones: &[String],
-    repo_facts: &[RepoFact],
-    selected_model: &str,
-    selected_reasoning: &str,
-) -> RouteTree {
-    let classification = &decision.classification;
-    let signal_nodes = matched_signals
+fn signal_effect(kind: &str) -> &'static str {
+    match kind {
+        "risk-zone" | "changed-files" => "raised_profile",
+        "area" => "confirmed_area",
+        "intent" => "confirmed_intent",
+        "policy-profile" => "policy_override",
+        _ => "evidence",
+    }
+}
+
+struct RouteTreeInput<'a> {
+    decision: &'a RoutingDecision,
+    matched_signals: &'a [MatchedSignal],
+    risk_zones: &'a [String],
+    repo_facts: &'a [RepoFact],
+    selected_model: &'a str,
+    selected_reasoning: &'a str,
+    prompt_mode: &'a str,
+    execution_mode: &'a str,
+    policy_source: &'a str,
+    provider_command_preview: Option<&'a ProviderCommandPreview>,
+}
+
+fn build_route_tree(input: RouteTreeInput<'_>) -> RouteTree {
+    let classification = &input.decision.classification;
+    let signal_nodes = input
+        .matched_signals
         .iter()
-        .map(|signal| RouteTreeNode::leaf(&signal.kind, &signal.value))
+        .map(|signal| RouteTreeNode::leaf(&signal.source, &signal.name))
         .collect::<Vec<_>>();
-    let risk_nodes = risk_zones
+    let risk_nodes = input
+        .risk_zones
         .iter()
         .map(|zone| RouteTreeNode::leaf("risk-zone", zone))
         .collect::<Vec<_>>();
-    let repo_nodes = repo_facts
+    let repo_nodes = input
+        .repo_facts
         .iter()
         .map(|fact| RouteTreeNode::leaf(&fact.key, &fact.value))
         .collect::<Vec<_>>();
+    let provider_preview = input
+        .provider_command_preview
+        .map(|preview| format!("{} {:?}", preview.program, preview.args))
+        .unwrap_or_else(|| "-".to_string());
 
     RouteTree {
         root: RouteTreeNode::branch(
@@ -243,23 +281,41 @@ fn build_route_tree(
                         RouteTreeNode::leaf("Scope", classification.scope.as_str()),
                         RouteTreeNode::leaf("Risk", classification.risk.as_str()),
                         RouteTreeNode::leaf("Confidence", classification.confidence.as_str()),
+                        RouteTreeNode::leaf(
+                            "Target",
+                            classification
+                                .targets
+                                .first()
+                                .map_or("-", |target| target.value.as_str()),
+                        ),
                     ],
                 ),
                 RouteTreeNode::branch("Matched Signals", signal_nodes),
-                RouteTreeNode::branch("Repo Context", [risk_nodes, repo_nodes].concat()),
+                RouteTreeNode::branch(
+                    "Repo Context",
+                    [
+                        vec![RouteTreeNode::leaf("Policy source", input.policy_source)],
+                        risk_nodes,
+                        repo_nodes,
+                    ]
+                    .concat(),
+                ),
                 RouteTreeNode::branch(
                     "Route Decision",
                     vec![
                         RouteTreeNode::leaf(
                             "Requested profile",
-                            decision.requested_profile.as_str(),
+                            input.decision.requested_profile.as_str(),
                         ),
                         RouteTreeNode::leaf(
                             "Selected profile",
-                            decision.effective_profile.as_str(),
+                            input.decision.effective_profile.as_str(),
                         ),
-                        RouteTreeNode::leaf("Model", selected_model),
-                        RouteTreeNode::leaf("Reasoning", selected_reasoning),
+                        RouteTreeNode::leaf("Model", input.selected_model),
+                        RouteTreeNode::leaf("Reasoning", input.selected_reasoning),
+                        RouteTreeNode::leaf("Prompt mode", input.prompt_mode),
+                        RouteTreeNode::leaf("Execution mode", input.execution_mode),
+                        RouteTreeNode::leaf("Provider command preview", provider_preview),
                     ],
                 ),
             ],
@@ -309,18 +365,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn task_hash_is_stable() {
-        assert_eq!(
-            fnv1a64_hex("debug auth flow"),
-            fnv1a64_hex("debug auth flow")
-        );
-        assert_ne!(fnv1a64_hex("debug auth flow"), fnv1a64_hex("fix readme"));
-    }
-
-    #[test]
     fn matched_signal_parser_keeps_kind_and_value() {
         let signal = signal_to_matched_signal("risk-zone:auth");
-        assert_eq!(signal.kind, "risk-zone");
-        assert_eq!(signal.value, "auth");
+        assert_eq!(signal.source, "risk-zone");
+        assert_eq!(signal.name, "auth");
+        assert_eq!(signal.effect, "raised_profile");
     }
 }

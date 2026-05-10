@@ -150,9 +150,10 @@ pub fn apply_policy_rules(
     profile: Profile,
     risk_zones: &[RiskZone],
     changed_files: &[std::path::PathBuf],
+    target_hints: &[std::path::PathBuf],
 ) -> Profile {
     policy.rules.iter().fold(profile, |current, rule| {
-        if !policy_rule_matches(rule, risk_zones, changed_files) {
+        if !policy_rule_matches(rule, risk_zones, changed_files, target_hints) {
             return current;
         }
         let with_min = rule
@@ -167,19 +168,24 @@ fn policy_rule_matches(
     rule: &PolicyRule,
     risk_zones: &[RiskZone],
     changed_files: &[std::path::PathBuf],
+    target_hints: &[std::path::PathBuf],
 ) -> bool {
     let risk_matches = rule
         .if_risk_zone
         .is_none_or(|zone| risk_zones.contains(&zone));
     let path_matches = rule.if_path.as_ref().is_none_or(|pattern| {
         let pattern = normalize_pattern(pattern);
+        let paths = changed_files
+            .iter()
+            .chain(target_hints.iter())
+            .collect::<Vec<_>>();
         if rule.max_profile.is_some() && rule.min_profile.is_none() {
-            !changed_files.is_empty()
-                && changed_files
+            !paths.is_empty()
+                && paths
                     .iter()
                     .all(|path| normalize_path(path).contains(&pattern))
         } else {
-            changed_files
+            paths
                 .iter()
                 .any(|path| normalize_path(path).contains(&pattern))
         }
@@ -317,16 +323,41 @@ rules:
             Profile::Cheap,
             &[RiskZone::Auth],
             &[std::path::PathBuf::from("src/auth/session.rs")],
+            &[],
         );
         let lowered = apply_policy_rules(
             &policy,
             Profile::Balanced,
             &[],
             &[std::path::PathBuf::from("README.md")],
+            &[],
         );
 
         assert_eq!(elevated, Profile::Deep);
         assert_eq!(lowered, Profile::Cheap);
+    }
+
+    #[test]
+    fn policy_rules_match_explicit_target_hints() {
+        let raw = format!(
+            r#"
+{POLICY}
+rules:
+  - if_path: README.md
+    max_profile: cheap
+"#
+        );
+        let policy = PolicyFile::parse_yaml(&raw, "test.yaml").unwrap();
+
+        let profile = apply_policy_rules(
+            &policy,
+            Profile::Balanced,
+            &[],
+            &[],
+            &[std::path::PathBuf::from("README.md")],
+        );
+
+        assert_eq!(profile, Profile::Cheap);
     }
 
     #[test]

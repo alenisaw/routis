@@ -54,7 +54,12 @@ fn route_explain_prints_tree_and_writes_trace() {
         .stdout(predicate::str::contains("Routis Decision Trace"))
         .stdout(predicate::str::contains("Selected profile:"));
 
-    assert!(routis_home.path().join("traces").join("cli.jsonl").exists());
+    let trace_count = std::fs::read_dir(routis_home.path().join("traces"))
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().extension().and_then(|value| value.to_str()) == Some("jsonl"))
+        .count();
+    assert_eq!(trace_count, 1);
 }
 
 #[test]

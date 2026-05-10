@@ -160,9 +160,9 @@ routis
 
 Enter a task in the input row. Routis plans locally, shows the prompt, provider, model and reasoning, selected area, branch, changed file count, and confidence, then waits for `proceed`, `edit`, or `cancel`.
 
-The TUI stores Routis runtime files next to the installed `routis` executable under `.routis`: config in `.routis/config.toml`, prompt history in `.routis/shell_history`, route sessions in `.routis/sessions`, and default policies in `.routis/policies`. Set `ROUTIS_HOME` to override this location. Provider diagnostics locate `codex` from the system PATH and run `codex --version`; on Windows, Routis prefers executable shims such as `.cmd` or `.exe` over blocked PowerShell scripts.
+The TUI stores persistent Routis runtime files under `~/.routis` by default: config in `~/.routis/config.toml`, prompt history in `~/.routis/shell_history`, route sessions in `~/.routis/sessions`, and default policies in `~/.routis/policies`. Set `ROUTIS_HOME` to override this location. Provider diagnostics locate `codex` from the system PATH and run `codex --version`; on Windows, Routis prefers executable shims such as `.cmd` or `.exe` over blocked PowerShell scripts.
 
-Decision traces are stored as JSONL files under `.routis/traces`. The trace stores a task hash instead of raw task text by default.
+Decision traces are stored as JSONL files under `~/.routis/traces`. The trace stores an HMAC-SHA256 task hash using a per-install secret at `~/.routis/secret` instead of raw task text by default.
 
 ## Command Reference
 
@@ -183,7 +183,7 @@ Commands:
 
 ## Policy File
 
-Default policy file: the install-local `.routis/policies/default.yaml`.
+Default policy file: `~/.routis/policies/default.yaml`.
 
 ```yaml
 version: 1

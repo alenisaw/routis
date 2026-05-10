@@ -191,7 +191,7 @@ fn render_runtime_line(frame: &mut Frame, area: Rect, state: &AppState, palette:
         Span::styled(state.repo_context.branch.clone(), palette.muted()),
     ];
     let right_text = format!(
-        "context {}% {} input {} tk {} output {} tk {} saved {}%",
+        "context hint {}% {} input {} tk {} output {} tk {} confidence {}%",
         state.metrics.context_percent,
         symbols::SEP,
         state.metrics.input_tokens,
