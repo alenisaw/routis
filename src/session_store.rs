@@ -39,8 +39,8 @@ impl SessionRecord {
     ) -> Self {
         let now = now_epoch_seconds();
         let id_time = now_epoch_nanos();
-        let task_preview = sanitized_preview(task);
-        let title = slug(task_preview.as_deref().unwrap_or("new session"));
+        let task_preview = None;
+        let title = session_title(effective_profile);
         Self {
             schema_version: 1,
             id: format!("{id_time}-{title}"),
@@ -151,6 +151,15 @@ fn deserialize_legacy(raw: &str) -> Option<SessionRecord> {
     })
 }
 
+fn session_title(effective_profile: &str) -> String {
+    let profile = slug(effective_profile);
+    if profile.is_empty() {
+        "route-session".to_string()
+    } else {
+        format!("{profile}-route")
+    }
+}
+
 fn slug(value: &str) -> String {
     let slug = value
         .split_whitespace()
@@ -255,10 +264,10 @@ mod tests {
         let sessions = store.list().unwrap();
 
         assert_eq!(sessions.len(), 2);
-        assert_eq!(sessions[0].title, "debug-auth-flow");
+        assert_eq!(sessions[0].title, "deep-route");
         assert_eq!(sessions[0].branch, "feature/auth");
         assert_eq!(sessions[0].effective_profile, "deep");
-        assert_eq!(sessions[1].title, "first-task");
+        assert_eq!(sessions[1].title, "balanced-route");
     }
 
     #[test]
@@ -276,10 +285,7 @@ mod tests {
         let id_prefix = record.id.chars().take(8).collect::<String>();
         store.save(&record).unwrap();
 
-        assert_eq!(
-            store.find("debug-auth-flow").unwrap().unwrap().id,
-            record.id
-        );
+        assert_eq!(store.find("deep-route").unwrap().unwrap().id, record.id);
         assert_eq!(store.find(&id_prefix).unwrap().unwrap().title, record.title);
         assert!(store.find("missing").unwrap().is_none());
     }
@@ -326,6 +332,7 @@ mod tests {
         );
 
         assert_ne!(first.id, second.id);
+        assert_eq!(first.title, "deep-route");
         assert_eq!(first.title, second.title);
     }
 }

@@ -1,0 +1,8 @@
+Routis Decision Trace
+Input Analysis
+Intent: architecture
+Route Decision
+Selected profile: extradeep
+Reasoning: xhigh
+Provider command preview: codex
+<task-redacted>

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use routis_context::RepoContext;
-use routis_core::{route_task_with_repo_context, Confidence, Profile, RoutingDecision};
+use routis_core::{route_task_with_repo_context, Profile, RoutingDecision};
 use routis_policy::{apply_policy_rules, PolicyFile};
 use std::{
     path::{Path, PathBuf},
@@ -23,8 +23,8 @@ pub struct ExecutionPlan {
     pub scope: String,
     pub risk: String,
     pub confidence: String,
-    pub context_load_hint: usize,
-    pub confidence_hint: usize,
+    pub context_load_hint: String,
+    pub confidence_hint: String,
     pub reason: String,
     pub policy_source: String,
 }
@@ -231,8 +231,8 @@ fn plan_execution_with_decision(
         scope: decision.classification.scope.as_str().to_string(),
         risk: decision.classification.risk.as_str().to_string(),
         confidence: decision.classification.confidence.as_str().to_string(),
-        context_load_hint: repo_context.changed_files.len().saturating_mul(6).min(100),
-        confidence_hint: confidence_hint(decision.classification.confidence),
+        context_load_hint: context_load_hint(repo_context.changed_files.len()),
+        confidence_hint: decision.classification.confidence.as_str().to_string(),
         reason: decision.explain.clone(),
         policy_source: String::new(),
     };
@@ -272,11 +272,12 @@ fn paths_to_strings(paths: &[PathBuf]) -> Vec<String> {
         .collect()
 }
 
-fn confidence_hint(confidence: Confidence) -> usize {
-    match confidence {
-        Confidence::High => 38,
-        Confidence::Medium => 28,
-        Confidence::Low => 12,
+fn context_load_hint(changed_files: usize) -> String {
+    match changed_files {
+        0 => "none".to_string(),
+        1..=3 => "light".to_string(),
+        4..=10 => "moderate".to_string(),
+        _ => "heavy".to_string(),
     }
 }
 

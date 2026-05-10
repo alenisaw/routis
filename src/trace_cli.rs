@@ -39,6 +39,7 @@ pub fn build_cli_decision_trace(
         DecisionTraceInput {
             session_id: new_cli_session_id()?,
             task_hash,
+            timestamp_unix_ms: None,
             selected_model: input.selected_model,
             selected_reasoning: input.selected_reasoning,
             prompt_mode: PromptMode::Raw,

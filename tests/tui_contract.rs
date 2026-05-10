@@ -397,12 +397,16 @@ fn sessions_picker_prefers_session_store_records() {
 
     assert!(state.ui.command_palette_open);
     assert_eq!(state.ui.session_picker_items.len(), 1);
-    assert_eq!(state.ui.session_picker_items[0].title, "debug-auth-flow");
+    assert_ne!(state.ui.session_picker_items[0].title, "debug-auth-flow");
+    assert!(!state.ui.session_picker_items[0].title.trim().is_empty());
     assert_eq!(state.ui.session_picker_items[0].branch, "feature/auth");
-    assert_eq!(
+    assert_ne!(
         state.ui.session_picker_items[0].conversation,
         "debug auth flow"
     );
+    assert!(!state.ui.session_picker_items[0]
+        .conversation
+        .contains("debug auth flow"));
 }
 
 #[test]
@@ -711,9 +715,15 @@ profiles:
 
     assert!(!text.contains("active-session"));
     assert!(!text.contains("debug-auth-flow"));
+    assert!(!text.contains("Prompt: \"debug auth flow\""));
+    assert!(!text.contains("debug auth flow"));
     assert!(text.contains("You"));
     assert!(text.contains("Routis"));
-    assert!(text.contains("Prompt: \"debug auth flow\""));
+    assert!(
+        text.contains("Task: <redacted>")
+            || text.contains("Task text is redacted")
+            || text.contains("Task hash:")
+    );
     assert!(matches!(
         state.current_plan.profile.as_str(),
         "deep" | "extradeep"
@@ -809,7 +819,12 @@ fn session_timeline_follows_bottom_when_new_prompt_starts() {
     );
 
     let text = render_to_text(120, 36, &state);
-    assert!(text.contains("fresh prompt"));
+    assert!(!text.contains("fresh prompt"));
+    assert!(
+        text.contains("Task submitted")
+            || text.contains("Task: <redacted>")
+            || text.contains("Preparing local execution plan")
+    );
     assert!(!text.contains("old event 0"));
 }
 
@@ -955,7 +970,12 @@ fn slash_command_history_survives_next_prompt() {
         .iter()
         .any(|event| event.title == "Command result"));
     let text = render_to_text(150, 44, &state);
-    assert!(text.contains("next task"));
+    assert!(!text.contains("next task"));
+    assert!(
+        text.contains("Task submitted")
+            || text.contains("Task: <redacted>")
+            || text.contains("Preparing local execution plan")
+    );
 }
 
 #[test]

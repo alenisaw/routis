@@ -1,0 +1,7 @@
+Routis Decision Trace
+Input Analysis
+Area: release
+Route Decision
+Prompt mode: preview-only
+Provider command preview: codex
+<task-redacted>

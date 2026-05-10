@@ -546,7 +546,7 @@ fn score_intents(
         (
             IntentKind::Debug,
             4,
-            &["debug", "trace", "investigate", "root cause"],
+            &["debug", "stack trace", "investigate", "root cause"],
         ),
         (
             IntentKind::Create,

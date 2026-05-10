@@ -1,3 +1,7 @@
+use routis_core::{
+    DecisionTrace, DecisionTraceInput, PromptMode, ProviderCommandPreview, RepoFact,
+};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppMode {
     Setup,
@@ -241,11 +245,11 @@ impl Default for SessionState {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MetricsState {
     pub tasks: usize,
-    pub context_load_hint: usize,
+    pub context_load_hint: String,
     pub input_tokens: usize,
     pub output_tokens: usize,
     pub total_tokens: usize,
-    pub confidence_hint: usize,
+    pub confidence_hint: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -310,6 +314,8 @@ pub struct AppState {
     pub provider_diagnostics: ProviderDiagnostics,
     pub repo_context: RepoContextState,
     pub current_plan: CurrentPlanState,
+    pub last_decision_trace: Option<DecisionTrace>,
+    pub routing_error: Option<String>,
     pub session: SessionState,
     pub metrics: MetricsState,
     pub ui: UiState,
@@ -325,6 +331,8 @@ impl AppState {
             provider_diagnostics: detect_provider_diagnostics(),
             repo_context: RepoContextState::default(),
             current_plan: CurrentPlanState::default(),
+            last_decision_trace: None,
+            routing_error: None,
             session: SessionState::default(),
             metrics: MetricsState::default(),
             ui: UiState::default(),
@@ -386,7 +394,13 @@ impl AppState {
 
     pub fn start_session(&mut self, task: &str, title: String) {
         let task = task.trim();
-        let plan = execution_plan(task, self);
+        let (plan, trace) = match execution_plan(task, self) {
+            Ok(value) => value,
+            Err(error) => {
+                self.start_failed_session(task, title, error.to_string());
+                return;
+            }
+        };
         let mut events = std::mem::take(&mut self.session.events);
         self.mode = AppMode::Session;
         self.session.title = title;
@@ -411,17 +425,20 @@ impl AppState {
         self.current_plan.profile = plan.profile.clone();
         self.current_plan.model = plan.model.clone();
         self.current_plan.reasoning = plan.reasoning.clone();
+        self.last_decision_trace = Some(trace.clone());
+        self.routing_error = None;
         events.extend([
             SessionEvent {
                 source: "You".to_string(),
-                title: task.to_string(),
-                lines: Vec::new(),
+                title: "Task submitted".to_string(),
+                lines: vec!["Task text is redacted in local TUI state.".to_string()],
             },
             SessionEvent {
                 source: "Routis".to_string(),
                 title: "Preparing local execution plan".to_string(),
                 lines: vec![
-                    format!("Prompt: \"{task}\""),
+                    format!("Task hash: {}", trace.task_hash),
+                    "Task: <redacted>".to_string(),
                     format!("Provider: {}", self.config.provider),
                     format!("Model & reason: {} / {}", plan.model, plan.reasoning),
                     format!("Repo: {} changed files", plan.changed_files),
@@ -454,6 +471,38 @@ impl AppState {
         self.ui.command_palette_open = false;
         self.ui.shortcuts_open = false;
         self.ui.confirmation_index = 0;
+    }
+
+    fn start_failed_session(&mut self, _task: &str, title: String, error: String) {
+        self.mode = AppMode::Session;
+        self.session.title = title;
+        self.session.current_task = String::new();
+        self.session.phase = SessionPhase::Cancelled;
+        self.session.visible_lines = 4;
+        self.session.scroll = 0;
+        self.session.follow = true;
+        self.last_decision_trace = None;
+        self.routing_error = Some(error.clone());
+        self.session.events = vec![
+            SessionEvent {
+                source: "You".to_string(),
+                title: "Task submitted".to_string(),
+                lines: vec!["Task text is redacted in local TUI state.".to_string()],
+            },
+            SessionEvent {
+                source: "Routis".to_string(),
+                title: "Routing failed".to_string(),
+                lines: vec![
+                    error,
+                    "No execution plan was fabricated.".to_string(),
+                    "Fix the routing/policy error, then retry.".to_string(),
+                ],
+            },
+        ];
+        self.ui.input.clear();
+        self.ui.command_palette_open = false;
+        self.ui.shortcuts_open = false;
+        self.ui.status_line = "routing failed; no provider process started".to_string();
     }
 
     pub fn cancel_session(&mut self) {
@@ -525,29 +574,45 @@ impl AppState {
     }
 }
 
-fn execution_plan(task: &str, state: &AppState) -> crate::route_plan::ExecutionPlan {
-    crate::route_plan::build_execution_plan(
+fn execution_plan(
+    task: &str,
+    state: &AppState,
+) -> anyhow::Result<(crate::route_plan::ExecutionPlan, DecisionTrace)> {
+    let route = crate::route_plan::build_execution_plan_with_decision(
         task,
         &state.config.policy_file,
-        std::env::current_dir().unwrap_or_default(),
-    )
-    .unwrap_or_else(|_| crate::route_plan::ExecutionPlan {
-        profile: "balanced".to_string(),
-        model: "gpt-5.5".to_string(),
-        reasoning: "medium".to_string(),
-        branch: state.repo_context.branch.clone(),
-        changed_files: state.repo_context.changed_files,
-        impact_area: state.repo_context.impact_area.clone(),
-        intent: "unknown".to_string(),
-        area: "unknown".to_string(),
-        scope: "unknown".to_string(),
-        risk: "medium".to_string(),
-        confidence: "low".to_string(),
-        context_load_hint: state.metrics.context_load_hint,
-        confidence_hint: state.metrics.confidence_hint,
-        reason: "fallback plan after routing error".to_string(),
-        policy_source: "fallback".to_string(),
-    })
+        std::env::current_dir()?,
+    )?;
+    let plan = route.plan.clone();
+    let trace = DecisionTrace::from_routing_decision(
+        &route.decision,
+        DecisionTraceInput {
+            session_id: "tui-live".to_string(),
+            task_hash: "<tui-memory-only>".to_string(),
+            timestamp_unix_ms: None,
+            selected_model: plan.model.clone(),
+            selected_reasoning: plan.reasoning.clone(),
+            prompt_mode: PromptMode::PreviewOnly,
+            execution_mode: "tui-preview".to_string(),
+            policy_source: plan.policy_source.clone(),
+            policy_overrides: route.policy_overrides,
+            provider_command_preview: Some(ProviderCommandPreview {
+                program: "codex".to_string(),
+                args: vec![
+                    "exec".to_string(),
+                    "-m".to_string(),
+                    plan.model.clone(),
+                    "--reasoning".to_string(),
+                    plan.reasoning.clone(),
+                    "--".to_string(),
+                    "<task-redacted>".to_string(),
+                ],
+            }),
+            risk_zones: route.repo_context.risk_zone_hints,
+            repo_facts: vec![RepoFact::new("policy-source", plan.policy_source.clone())],
+        },
+    );
+    Ok((plan, trace))
 }
 
 // ── Public name/index helpers ─────────────────────────────────────────────
