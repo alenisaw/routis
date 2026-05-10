@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+﻿use anyhow::{Context, Result};
 use hmac::{Hmac, KeyInit, Mac};
 use routis_core::{
     DecisionTrace, DecisionTraceInput, PromptMode, ProviderCommandPreview, RepoFact, RiskZone,
