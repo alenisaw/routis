@@ -12,6 +12,7 @@ This patch release hardens the v0.4.0 auditable routing layer after review. It i
 - Fixed privacy-redacted persisted session resume behavior so stored sessions without raw task text are not re-executed as synthetic `task <hash>` prompts.
 - Fixed trace secret validation test behavior by removing shared `ROUTIS_HOME` state from the invalid-secret test path.
 - Fixed trace privacy tests so they verify redaction of raw task text, API key markers, bearer tokens, `.env` references, GitHub-style tokens, JWT-like values, and private key markers without depending on persistent runtime state.
+- Fixed TUI session picker resume handling so privacy-redacted persisted sessions are blocked before execution instead of launching an empty or synthetic task.
 
 ### Changed
 
