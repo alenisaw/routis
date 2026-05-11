@@ -941,11 +941,13 @@ fn session_store_items(store: &SessionStore) -> Result<Vec<SessionPickerItem>> {
         .into_iter()
         .take(12)
         .map(|session| {
+            let task = session.task_preview.clone().unwrap_or_default();
             let conversation = session
                 .task_preview
+                .clone()
                 .unwrap_or_else(|| format!("task {}", &session.task_hash[..12]));
             SessionPickerItem {
-                task: conversation.clone(),
+                task,
                 conversation,
                 title: session.title,
                 created: session.created_at.to_string(),

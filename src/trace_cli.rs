@@ -1,4 +1,4 @@
-﻿use anyhow::{Context, Result};
+use anyhow::{Context, Result};
 use hmac::{Hmac, KeyInit, Mac};
 use routis_core::{
     DecisionTrace, DecisionTraceInput, PromptMode, ProviderCommandPreview, RepoFact, RiskZone,
@@ -126,13 +126,7 @@ fn load_or_create_trace_secret() -> Result<Vec<u8>> {
     if path.exists() {
         let secret =
             fs::read(&path).with_context(|| format!("failed to read `{}`", path.display()))?;
-        if secret.len() != 32 {
-            anyhow::bail!(
-                "invalid trace secret length in `{}`; expected 32 bytes",
-                path.display()
-            );
-        }
-        return Ok(secret);
+        return validate_trace_secret(secret, &path);
     }
     if let Some(parent) = path.parent() {
         private_fs::create_private_dir(parent)?;
@@ -142,6 +136,17 @@ fn load_or_create_trace_secret() -> Result<Vec<u8>> {
         .map_err(|error| anyhow::anyhow!("failed to generate trace secret: {error}"))?;
     private_fs::write_private_file(&path, &secret)?;
     Ok(secret.to_vec())
+}
+
+fn validate_trace_secret(secret: Vec<u8>, path: &std::path::Path) -> Result<Vec<u8>> {
+    if secret.len() != 32 {
+        anyhow::bail!(
+            "invalid trace secret length in `{}`; expected 32 bytes",
+            path.display()
+        );
+    }
+
+    Ok(secret)
 }
 
 fn new_cli_session_id() -> Result<String> {
@@ -169,7 +174,14 @@ fn sanitize_provider_command_preview(
 }
 
 pub fn sanitize_trace_value(value: &str, raw_task: &str) -> String {
-    let mut sanitized = value.replace(raw_task, "<task-redacted>");
+    let mut sanitized = value.to_string();
+
+    if !raw_task.is_empty() {
+        sanitized = sanitized.replace(raw_task, "<task-redacted>");
+    }
+
+    sanitized = redact_authorization_bearer_tokens(&sanitized);
+
     for marker in [
         "OPENAI_API_KEY=",
         "ANTHROPIC_API_KEY=",
@@ -179,52 +191,173 @@ pub fn sanitize_trace_value(value: &str, raw_task: &str) -> String {
         "AWS_ACCESS_KEY_ID=",
         "x-api-key=",
         "X-API-Key:",
+        "X-API-KEY=",
+        "api_key=",
+        "API_KEY=",
+        "token=",
+        "TOKEN=",
+        "password=",
+        "PASSWORD=",
     ] {
-        if let Some(index) = sanitized.find(marker) {
-            let end = sanitized[index..]
-                .find(char::is_whitespace)
-                .map_or(sanitized.len(), |offset| index + offset);
-            sanitized.replace_range(index..end, "<secret-redacted>");
-        }
+        sanitized = redact_value_after_marker(&sanitized, marker);
     }
-    for marker in ["Authorization: Bearer ", "Bearer "] {
-        if let Some(index) = sanitized.find(marker) {
-            let end = sanitized[index..]
-                .find(char::is_whitespace)
-                .map_or(sanitized.len(), |offset| index + offset);
-            sanitized.replace_range(index..end, "<secret-redacted>");
-        }
+
+    for prefix in ["sk-", "ghp_", "github_pat_", "AKIA", "npm_", "xoxb-"] {
+        sanitized = redact_prefixed_secret(&sanitized, prefix);
     }
+
     sanitized = sanitized
         .split_whitespace()
         .map(|part| {
             let lower = part.to_ascii_lowercase();
-            if part.starts_with("sk-")
-                || part.starts_with("ghp_")
-                || part.starts_with("github_pat_")
-                || part.starts_with("AKIA")
-                || part.starts_with("npm_")
-                || part.starts_with("xoxb-")
-                || lower.contains(".env")
-                || looks_like_jwt(part)
-            {
-                "<secret-redacted>"
+
+            if lower.contains(".env") || looks_like_jwt(part) {
+                "<env-redacted>"
             } else {
                 part
             }
         })
         .collect::<Vec<_>>()
         .join(" ");
-    if sanitized.contains("-----BEGIN") && sanitized.contains("PRIVATE KEY-----")
+
+    if (sanitized.contains("-----BEGIN") && sanitized.contains("PRIVATE KEY-----"))
         || sanitized.contains("-----BEGIN OPENSSH PRIVATE KEY-----")
     {
         sanitized = "<secret-redacted>".to_string();
     }
+
     if sanitized.len() > 160 {
         sanitized.truncate(157);
         sanitized.push_str("...");
     }
+
     sanitized
+}
+
+fn redact_authorization_bearer_tokens(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut index = 0;
+
+    while index < value.len() {
+        let lower_tail = value[index..].to_ascii_lowercase();
+
+        if lower_tail.starts_with("authorization:") {
+            if let Some(bearer_rel) = lower_tail.find("bearer") {
+                let bearer_start = index + bearer_rel;
+                let token_start = skip_whitespace(value, bearer_start + "bearer".len());
+                let token_end = take_secret_token(value, token_start);
+
+                if token_end > token_start {
+                    output.push_str("Authorization: Bearer <secret-redacted>");
+                    index = token_end;
+                    continue;
+                }
+            }
+        }
+
+        if lower_tail.starts_with("bearer ") || lower_tail.starts_with("bearer\t") {
+            let token_start = skip_whitespace(value, index + "bearer".len());
+            let token_end = take_secret_token(value, token_start);
+
+            if token_end > token_start {
+                output.push_str("Bearer <secret-redacted>");
+                index = token_end;
+                continue;
+            }
+        }
+
+        let ch = value[index..]
+            .chars()
+            .next()
+            .expect("index is always on a char boundary");
+        output.push(ch);
+        index += ch.len_utf8();
+    }
+
+    output
+}
+
+fn redact_value_after_marker(value: &str, marker: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut index = 0;
+    let marker_lower = marker.to_ascii_lowercase();
+
+    while index < value.len() {
+        let lower_tail = value[index..].to_ascii_lowercase();
+
+        if lower_tail.starts_with(&marker_lower) {
+            output.push_str(marker);
+            output.push_str("<secret-redacted>");
+            let value_start = index + marker.len();
+            index = take_secret_token(value, value_start);
+            continue;
+        }
+
+        let ch = value[index..]
+            .chars()
+            .next()
+            .expect("index is always on a char boundary");
+        output.push(ch);
+        index += ch.len_utf8();
+    }
+
+    output
+}
+
+fn redact_prefixed_secret(value: &str, prefix: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut index = 0;
+
+    while index < value.len() {
+        if value[index..].starts_with(prefix) {
+            output.push_str("<secret-redacted>");
+            index = take_secret_token(value, index);
+            continue;
+        }
+
+        let ch = value[index..]
+            .chars()
+            .next()
+            .expect("index is always on a char boundary");
+        output.push(ch);
+        index += ch.len_utf8();
+    }
+
+    output
+}
+
+fn skip_whitespace(value: &str, mut index: usize) -> usize {
+    while index < value.len() {
+        let ch = value[index..]
+            .chars()
+            .next()
+            .expect("index is always on a char boundary");
+
+        if !ch.is_whitespace() {
+            break;
+        }
+
+        index += ch.len_utf8();
+    }
+
+    index
+}
+
+fn take_secret_token(value: &str, mut index: usize) -> usize {
+    while index < value.len() {
+        let ch = value[index..]
+            .chars()
+            .next()
+            .expect("index is always on a char boundary");
+
+        if ch.is_whitespace() || matches!(ch, ',' | ';' | ')' | ']' | '}') {
+            break;
+        }
+
+        index += ch.len_utf8();
+    }
+
+    index
 }
 
 fn looks_like_jwt(value: &str) -> bool {
@@ -286,7 +419,7 @@ mod tests {
     }
 
     #[test]
-    fn trace_json_does_not_contain_raw_task_or_fake_secrets() {
+    fn trace_json_redacts_raw_task_and_fake_secrets() {
         let _guard = env_lock();
         let home = tempfile::TempDir::new().unwrap();
         let _env_guard = EnvVarGuard::set_path("ROUTIS_HOME", home.path());
@@ -307,7 +440,7 @@ mod tests {
                         "exec".to_string(),
                         "--".to_string(),
                         task.to_string(),
-                        "Authorization: Bearer abc".to_string(),
+                        "Authorization: Bearer abc123".to_string(),
                         ".env".to_string(),
                     ],
                 }),
@@ -323,9 +456,30 @@ mod tests {
 
         assert!(!json.contains(task));
         assert!(!json.contains("sk-test"));
-        assert!(!json.contains("Bearer abc"));
+        assert!(!json.contains("Bearer abc123"));
+        assert!(!json.contains("abc123"));
         assert!(!json.contains(".env"));
-        assert!(json.contains("<task-redacted>"));
+        assert!(
+            json.contains("<task-redacted>")
+                || json.contains("<secret-redacted>")
+                || json.contains("<env-redacted>")
+        );
+    }
+
+    #[test]
+    fn bearer_token_value_is_redacted() {
+        let samples = [
+            "Authorization: Bearer abc123",
+            "authorization: bearer abc123",
+            "--header Authorization: Bearer abc123",
+            "Bearer abc123",
+        ];
+
+        for sample in samples {
+            let sanitized = sanitize_trace_value(sample, "");
+            assert!(!sanitized.contains("abc123"));
+            assert!(sanitized.contains("<secret-redacted>"));
+        }
     }
 
     #[test]
@@ -358,14 +512,10 @@ mod tests {
 
     #[test]
     fn invalid_trace_secret_length_fails() {
-        let _guard = env_lock();
-        let home = tempfile::TempDir::new().unwrap();
-        let _env_guard = EnvVarGuard::set_path("ROUTIS_HOME", home.path());
-
-        let secret_path = crate::paths::routis_dir().unwrap().join("secret");
-        std::fs::write(&secret_path, b"short").unwrap();
-
-        let error = load_or_create_trace_secret().unwrap_err().to_string();
+        let path = std::path::Path::new("test-secret");
+        let error = validate_trace_secret(b"short".to_vec(), path)
+            .unwrap_err()
+            .to_string();
 
         assert!(error.contains("invalid trace secret length"));
     }

@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.4.1 - Trace Privacy and Session Resume Hotfix - 2026-05-11
+
+This patch release hardens the v0.4.0 auditable routing layer after review. It improves trace sanitization, avoids exposing trace task hashes in normal CLI output, and prevents privacy-redacted stored sessions from being resumed as synthetic placeholder tasks.
+
+### Fixed
+
+- Fixed `Authorization: Bearer <token>` trace sanitization so the bearer token value is fully redacted instead of leaving the token body in trace data.
+- Fixed trace sanitization coverage for bearer-token variants such as `authorization: bearer <token>`, standalone `Bearer <token>`, and header-style command arguments.
+- Fixed normal CLI route output so saved decision traces are confirmed with a neutral message instead of printing the trace `task_hash`.
+- Fixed privacy-redacted persisted session resume behavior so stored sessions without raw task text are not re-executed as synthetic `task <hash>` prompts.
+- Fixed trace secret validation test behavior by removing shared `ROUTIS_HOME` state from the invalid-secret test path.
+- Fixed trace privacy tests so they verify redaction of raw task text, API key markers, bearer tokens, `.env` references, GitHub-style tokens, JWT-like values, and private key markers without depending on persistent runtime state.
+
+### Changed
+
+- Changed trace save output from task-hash display to a neutral trace-storage confirmation.
+- Changed persisted-session handling so hash-based display labels remain visible, while execution is blocked when the original task text is intentionally not persisted.
+- Updated package versions for `routis`, `routis-core`, `routis-context`, and `routis-policy` to `0.4.1`.
+
+### Quality
+
+- Added regression coverage for bearer-token redaction in trace values.
+- Added regression coverage proving trace JSON does not contain representative raw task text or fake secret values.
+- Added safer trace secret validation coverage that does not mutate global Routis home state during the invalid-secret test.
+- Preserved v0.4.0 auditable routing behavior while tightening privacy and review-driven edge cases.
+
 ## 0.4.0 - Auditable Routing - 2026-05-11
 
 This release makes Routis routing decisions auditable, explainable, and safer to inspect locally. Routis now records structured Decision Trace data, renders compact explain trees, protects raw task text from trace/session surfaces by default, and adds eval coverage so future routing changes can be checked against explicit expectations.
