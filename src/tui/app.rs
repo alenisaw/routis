@@ -289,6 +289,14 @@ fn handle_session_picker_key(state: &mut AppState, key: KeyEvent) {
                 close_palette(state, "no sessions to resume");
                 return;
             };
+
+            if item.task.trim().is_empty() {
+                let warning = "Cannot resume this stored session because raw task text is not persisted in privacy-safe mode. Use /route <task> to continue.";
+                close_palette(state, warning);
+                push_command_event(state, "Command result", vec![warning.to_string()]);
+                return;
+            }
+
             state.ui.input = item.task.clone();
             close_palette(state, "session selected");
             state.start_session(&item.task, item.title);
@@ -941,11 +949,13 @@ fn session_store_items(store: &SessionStore) -> Result<Vec<SessionPickerItem>> {
         .into_iter()
         .take(12)
         .map(|session| {
+            let task = session.task_preview.clone().unwrap_or_default();
             let conversation = session
                 .task_preview
+                .clone()
                 .unwrap_or_else(|| format!("task {}", &session.task_hash[..12]));
             SessionPickerItem {
-                task: conversation.clone(),
+                task,
                 conversation,
                 title: session.title,
                 created: session.created_at.to_string(),

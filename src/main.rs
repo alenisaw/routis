@@ -95,7 +95,7 @@ fn run_route(task: Vec<String>, explain: bool) -> Result<()> {
     )?;
     trace_cli::append_cli_trace(&trace).context("failed to store decision trace")?;
 
-    println!("task_hash: {}", trace.task_hash);
+    println!("decision trace stored");
     println!(
         "selected: {} / {} / {}",
         plan.profile, plan.model, plan.reasoning
